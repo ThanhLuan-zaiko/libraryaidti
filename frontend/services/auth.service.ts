@@ -1,46 +1,15 @@
-import axios from 'axios';
+import apiClient from './api';
 
-// Configure axios to send cookies with every request
-axios.defaults.withCredentials = true;
-
-const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/auth`;
-
-// Response interceptor for silent refresh
-axios.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        const originalRequest = error.config;
-
-        // If error is 401 and it's not a retry and not the login request
-        if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url.includes('/login')) {
-            originalRequest._retry = true;
-
-            try {
-                // Attempt to refresh token
-                await axios.post(`${API_URL}/refresh`);
-
-                // Retry the original request
-                return axios(originalRequest);
-            } catch (refreshError) {
-                // If refresh fails, logout user
-                await authService.logout();
-                return Promise.reject(refreshError);
-            }
-        }
-
-        return Promise.reject(error);
-    }
-);
+const AUTH_URL = '/auth';
 
 export const authService = {
     async register(data: any) {
-        const response = await axios.post(`${API_URL}/register`, data);
+        const response = await apiClient.post(`${AUTH_URL}/register`, data);
         return response.data;
     },
 
     async login(data: any) {
-        const response = await axios.post(`${API_URL}/login`, data);
-        // Note: access_token and refresh_token are now handled by cookies (HttpOnly)
+        const response = await apiClient.post(`${AUTH_URL}/login`, data);
         if (response.data.user) {
             localStorage.setItem('user', JSON.stringify(response.data.user));
         }
@@ -49,16 +18,16 @@ export const authService = {
 
     async logout() {
         try {
-            await axios.post(`${API_URL}/logout`);
+            await apiClient.post(`${AUTH_URL}/logout`);
         } catch (error) {
             console.error('Logout failed:', error);
         } finally {
             localStorage.removeItem('user');
-            // Tokens in cookies are cleared by the backend
         }
     },
 
     getCurrentUser() {
+        if (typeof window === 'undefined') return null;
         const user = localStorage.getItem('user');
         return user ? JSON.parse(user) : null;
     },
@@ -68,8 +37,7 @@ export const authService = {
     },
 
     async updateProfile(fullName: string) {
-        const response = await axios.put(`${API_URL}/profile`, { full_name: fullName });
-        // Update local storage user data
+        const response = await apiClient.put(`${AUTH_URL}/profile`, { full_name: fullName });
         const user = this.getCurrentUser();
         if (user) {
             user.full_name = fullName;
@@ -79,7 +47,7 @@ export const authService = {
     },
 
     async changePassword(data: any) {
-        const response = await axios.put(`${API_URL}/password`, data);
+        const response = await apiClient.put(`${AUTH_URL}/password`, data);
         return response.data;
     }
 };

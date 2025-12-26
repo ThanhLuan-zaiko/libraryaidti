@@ -47,6 +47,10 @@ func main() {
 	authService := service.NewAuthService(authRepo)
 	authHandler := handler.NewAuthHandler(authService)
 
+	statsRepo := repository.NewStatsRepository(db.DB)
+	statsService := service.NewStatsService(statsRepo)
+	statsHandler := handler.NewStatsHandler(statsService)
+
 	// 5. Setup Router
 	r := gin.Default()
 
@@ -55,7 +59,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	appRouter := router.NewRouter(articleHandler, categoryHandler, authHandler)
+	appRouter := router.NewRouter(articleHandler, categoryHandler, authHandler, statsHandler)
 	appRouter.Setup(r)
 
 	// 6. Start Server

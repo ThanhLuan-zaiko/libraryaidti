@@ -12,13 +12,15 @@ type Router struct {
 	articleHandler  *handler.ArticleHandler
 	categoryHandler *handler.CategoryHandler
 	authHandler     *handler.AuthHandler
+	statsHandler    *handler.StatsHandler
 }
 
-func NewRouter(articleHandler *handler.ArticleHandler, categoryHandler *handler.CategoryHandler, authHandler *handler.AuthHandler) *Router {
+func NewRouter(articleHandler *handler.ArticleHandler, categoryHandler *handler.CategoryHandler, authHandler *handler.AuthHandler, statsHandler *handler.StatsHandler) *Router {
 	return &Router{
 		articleHandler:  articleHandler,
 		categoryHandler: categoryHandler,
 		authHandler:     authHandler,
+		statsHandler:    statsHandler,
 	}
 }
 
@@ -88,6 +90,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 				email, _ := c.Get("email")
 				c.JSON(200, gin.H{"message": "Welcome!", "email": email})
 			})
+
+			// Admin Stats
+			protected.GET("/admin/dashboard", r.statsHandler.GetDashboardData)
 		}
 	}
 }
