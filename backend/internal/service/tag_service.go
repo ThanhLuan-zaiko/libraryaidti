@@ -36,6 +36,19 @@ func (s *tagService) GetTagBySlug(slug string) (*domain.Tag, error) {
 	return s.repo.GetBySlug(slug)
 }
 
+func (s *tagService) GetTagList(page, limit int, search, sortBy, order string) (*domain.PaginatedResult[domain.Tag], error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return s.repo.GetList(page, limit, search, sortBy, order)
+}
+
 func (s *tagService) GetTagStats() ([]domain.TagStats, error) {
 	return s.repo.GetStats()
 }

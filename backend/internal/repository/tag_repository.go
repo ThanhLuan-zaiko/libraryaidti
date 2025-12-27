@@ -37,6 +37,58 @@ func (r *tagRepository) GetBySlug(slug string) (*domain.Tag, error) {
 	return &tag, err
 }
 
+func (r *tagRepository) GetList(page, limit int, search, sortBy, order string) (*domain.PaginatedResult[domain.Tag], error) {
+	var tags []domain.Tag
+	var totalRows int64
+
+	query := r.db.Model(&domain.Tag{})
+
+	if search != "" {
+		query = query.Where("name ILIKE ? OR slug ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	err := query.Count(&totalRows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	totalPages := int(totalRows) / limit
+	if int(totalRows)%limit != 0 {
+		totalPages++
+	}
+
+	offset := (page - 1) * limit
+
+	sortString := "name ASC" // Default for tags
+	if sortBy != "" {
+		sortDirection := "ASC"
+		if order == "desc" || order == "DESC" {
+			sortDirection = "DESC"
+		}
+		switch sortBy {
+		case "name":
+			sortString = "name " + sortDirection
+		case "slug":
+			sortString = "slug " + sortDirection
+		}
+	}
+
+	err = query.Limit(limit).Offset(offset).Order(sortString).Find(&tags).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.PaginatedResult[domain.Tag]{
+		Data: tags,
+		Pagination: domain.Pagination{
+			Page:       page,
+			Limit:      limit,
+			TotalRows:  totalRows,
+			TotalPages: totalPages,
+		},
+	}, nil
+}
+
 func (r *tagRepository) GetStats() ([]domain.TagStats, error) {
 	var stats []domain.TagStats
 	// Count usage in article_tags

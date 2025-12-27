@@ -64,7 +64,11 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	appRouter := router.NewRouter(articleHandler, categoryHandler, tagHandler, authHandler, statsHandler)
+	dashboardRepo := repository.NewDashboardRepository(db.DB)
+	dashboardService := service.NewDashboardService(dashboardRepo)
+	dashboardHandler := handler.NewDashboardHandler(dashboardService)
+
+	appRouter := router.NewRouter(articleHandler, categoryHandler, tagHandler, authHandler, statsHandler, dashboardHandler)
 	appRouter.Setup(r)
 
 	// 6. Start Server

@@ -50,7 +50,7 @@ func (r *categoryRepository) GetStats() ([]domain.CategoryStats, error) {
 	return stats, err
 }
 
-func (r *categoryRepository) GetList(page, limit int, search string) (*domain.PaginatedResult[domain.Category], error) {
+func (r *categoryRepository) GetList(page, limit int, search, sortBy, order string) (*domain.PaginatedResult[domain.Category], error) {
 	var categories []domain.Category
 	var totalRows int64
 
@@ -71,7 +71,22 @@ func (r *categoryRepository) GetList(page, limit int, search string) (*domain.Pa
 	}
 
 	offset := (page - 1) * limit
-	err = query.Preload("Parent").Limit(limit).Offset(offset).Order("created_at DESC").Find(&categories).Error
+
+	sortString := "created_at DESC"
+	if sortBy != "" {
+		sortDirection := "ASC"
+		if order == "desc" || order == "DESC" {
+			sortDirection = "DESC"
+		}
+		switch sortBy {
+		case "name":
+			sortString = "name " + sortDirection
+		case "created_at":
+			sortString = "created_at " + sortDirection
+		}
+	}
+
+	err = query.Preload("Parent").Limit(limit).Offset(offset).Order(sortString).Find(&categories).Error
 	if err != nil {
 		return nil, err
 	}

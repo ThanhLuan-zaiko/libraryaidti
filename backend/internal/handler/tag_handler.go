@@ -3,6 +3,7 @@ package handler
 import (
 	"backend/internal/domain"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -32,6 +33,25 @@ func (h *TagHandler) CreateTag(c *gin.Context) {
 }
 
 func (h *TagHandler) GetTags(c *gin.Context) {
+	pageStr := c.Query("page")
+	limitStr := c.Query("limit")
+	search := c.Query("q")
+	sortBy := c.Query("sort")
+	order := c.Query("order")
+
+	if pageStr != "" || limitStr != "" || search != "" || sortBy != "" || order != "" {
+		page, _ := strconv.Atoi(pageStr)
+		limit, _ := strconv.Atoi(limitStr)
+
+		result, err := h.service.GetTagList(page, limit, search, sortBy, order)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+		return
+	}
+
 	tags, err := h.service.GetTags()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

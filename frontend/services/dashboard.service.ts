@@ -1,4 +1,22 @@
-import apiClient from "./api";
+import apiClient from './api';
+import { CategoryStats } from './category.service';
+import { TagStats } from './tag.service';
+
+const ANALYTICS_URL = '/admin/analytics';
+
+export interface ArticleTrend {
+    date: string;
+    count: number;
+}
+
+export interface AnalyticsData {
+    total_articles: number;
+    total_views: number;
+    total_comments: number;
+    article_trend: ArticleTrend[];
+    top_categories: CategoryStats[];
+    top_tags: TagStats[];
+}
 
 export interface AdminStats {
     total_articles: number;
@@ -17,15 +35,13 @@ export interface AdminActivity {
     user: string;
 }
 
-export interface AnalyticsData {
-    [key: string]: string | number;
+export interface DashboardAnalytics {
     date: string;
     articles: number;
     views: number;
 }
 
 export interface CategoryDistribution {
-    [key: string]: string | number;
     name: string;
     value: number;
 }
@@ -33,11 +49,18 @@ export interface CategoryDistribution {
 export interface DashboardData {
     stats: AdminStats;
     activities: AdminActivity[];
-    analytics: AnalyticsData[];
+    analytics: DashboardAnalytics[];
     category_distribution: CategoryDistribution[];
 }
 
-export const getDashboardData = async (): Promise<DashboardData> => {
-    const response = await apiClient.get("/admin/dashboard");
+export const getDashboardData = async () => {
+    const response = await apiClient.get<DashboardData>('/admin/dashboard');
     return response.data;
+};
+
+export const dashboardService = {
+    async getAnalytics() {
+        const response = await apiClient.get<AnalyticsData>(ANALYTICS_URL);
+        return response.data;
+    }
 };

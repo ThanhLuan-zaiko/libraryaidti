@@ -1,14 +1,17 @@
 import { Category } from "@/services/category.service";
-import { FiEdit2, FiTrash2, FiFolder } from "react-icons/fi";
+import { FiEdit2, FiTrash2, FiFolder, FiArrowUp, FiArrowDown } from "react-icons/fi";
 
 interface CategoryTableProps {
     categories: Category[];
     loading: boolean;
+    sortField: string;
+    sortOrder: string;
     onEdit: (category: Category) => void;
     onDelete: (id: string) => void;
+    onSort: (field: string) => void;
 }
 
-export default function CategoryTable({ categories, loading, onEdit, onDelete }: CategoryTableProps) {
+export default function CategoryTable({ categories, loading, sortField, sortOrder, onEdit, onDelete, onSort }: CategoryTableProps) {
     if (loading) {
         return (
             <div className="p-12 flex flex-col items-center justify-center text-gray-400">
@@ -27,19 +30,43 @@ export default function CategoryTable({ categories, loading, onEdit, onDelete }:
         );
     }
 
+    const renderSortButton = (field: string, label: string) => {
+        const isActive = sortField === field;
+        return (
+            <button
+                onClick={() => onSort(field)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all ${isActive
+                    ? 'bg-blue-100 text-blue-700 font-bold shadow-sm'
+                    : 'hover:bg-gray-100 text-gray-600 hover:text-blue-600'
+                    }`}
+            >
+                {label}
+                {isActive && (
+                    sortOrder === "asc"
+                        ? <FiArrowUp className="w-4 h-4" />
+                        : <FiArrowDown className="w-4 h-4" />
+                )}
+            </button>
+        );
+    };
+
     return (
         <div className="overflow-x-auto">
             <div className="min-w-[800px]">
-                <div className="flex items-center p-4 bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                    <div className="flex-1">Tên danh mục / Slug</div>
-                    <div className="flex-1">Danh mục cha</div>
-                    <div className="hidden md:block flex-1">Mô tả</div>
-                    <div className="w-24 text-center">Trạng thái</div>
-                    <div className="w-32 text-right">Thao tác</div>
+                <div className="flex items-center p-4 bg-gradient-to-r from-gray-50 to-gray-100 text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-blue-200">
+                    <div className="flex-1 flex items-center gap-2">
+                        {renderSortButton("name", "Tên danh mục")}
+                    </div>
+                    <div className="flex-1 text-gray-500">Danh mục cha</div>
+                    <div className="hidden md:block flex-1 text-gray-500">Mô tả</div>
+                    <div className="w-24 text-center flex items-center justify-center">
+                        {renderSortButton("is_active", "Trạng thái")}
+                    </div>
+                    <div className="w-32 text-right text-gray-500">Thao tác</div>
                 </div>
 
                 {categories.map(category => (
-                    <div key={category.id} className="flex items-center p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <div key={category.id} className="flex items-center p-4 border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
                         <div className="flex items-center flex-1">
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center mr-3 bg-blue-100 text-blue-600">
                                 <FiFolder size={14} />

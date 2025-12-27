@@ -34,21 +34,23 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 
 func (h *CategoryHandler) GetCategories(c *gin.Context) {
 	pageStr := c.Query("page")
-	if pageStr != "" {
+	limitStr := c.Query("limit")
+	search := c.Query("q")
+	sortBy := c.Query("sort")
+	order := c.Query("order")
+
+	if pageStr != "" || limitStr != "" || search != "" || sortBy != "" || order != "" {
 		page, err := strconv.Atoi(pageStr)
 		if err != nil {
 			page = 1
 		}
 
-		limitStr := c.Query("limit")
 		limit, err := strconv.Atoi(limitStr)
 		if err != nil {
 			limit = 10
 		}
 
-		search := c.Query("q")
-
-		result, err := h.service.GetCategoryList(page, limit, search)
+		result, err := h.service.GetCategoryList(page, limit, search, sortBy, order)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

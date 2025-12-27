@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { categoryService, Category } from "@/services/category.service";
+import { tagService, Tag } from "@/services/tag.service";
 
-export const useCategoryLogic = () => {
+export const useTagLogic = () => {
     // Data States
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [allCategories, setAllCategories] = useState<Category[]>([]); // For Parent dropdown
+    const [tags, setTags] = useState<Tag[]>([]);
     const [pagination, setPagination] = useState({
         page: 1,
         limit: 10,
@@ -14,8 +13,8 @@ export const useCategoryLogic = () => {
     const [loading, setLoading] = useState(true);
 
     // Sorting State
-    const [sortField, setSortField] = useState<string>("created_at");
-    const [sortOrder, setSortOrder] = useState<string>("desc");
+    const [sortField, setSortField] = useState<string>("name");
+    const [sortOrder, setSortOrder] = useState<string>("asc");
 
     // Search State
     const [searchQuery, setSearchQuery] = useState("");
@@ -24,7 +23,6 @@ export const useCategoryLogic = () => {
     // Initial Load
     useEffect(() => {
         fetchData();
-        fetchAllForDropdown();
     }, []);
 
     const fetchData = async (
@@ -36,14 +34,14 @@ export const useCategoryLogic = () => {
     ) => {
         try {
             setLoading(true);
-            const result = await categoryService.getList({
+            const result = await tagService.getList({
                 page,
                 limit,
                 search,
                 sort,
                 order
             });
-            setCategories(result.data);
+            setTags(result.data);
             setPagination(prev => ({
                 ...prev,
                 page: result.pagination.page,
@@ -52,18 +50,9 @@ export const useCategoryLogic = () => {
                 total_pages: result.pagination.total_pages
             }));
         } catch (error) {
-            console.error("Failed to fetch data:", error);
+            console.error("Failed to fetch tags:", error);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const fetchAllForDropdown = async () => {
-        try {
-            const data = await categoryService.getAll();
-            setAllCategories(data);
-        } catch (error) {
-            console.error("Failed to fetch all categories:", error);
         }
     };
 
@@ -96,19 +85,16 @@ export const useCategoryLogic = () => {
         const newOrder = field === sortField && sortOrder === "asc" ? "desc" : "asc";
         setSortField(field);
         setSortOrder(newOrder);
-        // Reset to page 1 when sorting
         setPagination(prev => ({ ...prev, page: 1 }));
         fetchData(1, searchQuery, pagination.limit, field, newOrder);
     };
 
     const refreshData = () => {
         fetchData(pagination.page, searchQuery, pagination.limit, sortField, sortOrder);
-        fetchAllForDropdown();
     };
 
     return {
-        categories,
-        allCategories,
+        tags,
         pagination,
         loading,
         searchQuery,

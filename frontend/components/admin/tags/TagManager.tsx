@@ -1,17 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { tagService, Tag, TagStats } from "@/services/tag.service";
+import { useState } from "react";
 import { FiPlus } from "react-icons/fi";
+import { useTagLogic } from "@/hooks/admin/useTagLogic";
 import ConfirmModal from "@/components/admin/ConfirmModal";
-import TagGrid from "@/components/admin/tags/TagGrid";
-import TagStatsSection from "@/components/admin/tags/TagStatsSection";
-import TagModal from "@/components/admin/tags/TagModal";
+import Pagination from "@/components/admin/Pagination";
+import TagModal from "./TagModal";
+import TagTable from "./TagTable";
+import TagActions from "./TagActions";
+import { tagService, Tag } from "@/services/tag.service";
 
-export default function TagsPage() {
-    const [tags, setTags] = useState<Tag[]>([]);
-    const [stats, setStats] = useState<TagStats[]>([]);
-    const [loading, setLoading] = useState(true);
+export default function TagManager() {
+    // Logic Hook
+    const {
+        tags,
+        pagination,
+        loading,
+        searchQuery,
+        sortField,
+        sortOrder,
+        handlePageChange,
+        handleSearch,
+        handleLimitChange,
+        handleSort,
+        refreshData
+    } = useTagLogic();
 
     // UI States
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -20,36 +33,7 @@ export default function TagsPage() {
     const [tagToDelete, setTagToDelete] = useState<string | null>(null);
     const [deleting, setDeleting] = useState(false);
 
-    useEffect(() => {
-        fetchData();
-    }, []);
-
-    const fetchData = async () => {
-        try {
-            setLoading(true);
-            const [tagsData, statsData] = await Promise.all([
-                tagService.getAll(),
-                tagService.getStats()
-            ]);
-            setTags(tagsData);
-            setStats(statsData);
-        } catch (error) {
-            console.error("Failed to fetch data:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const refreshData = async () => {
-        try {
-            const data = await tagService.getAll();
-            setTags(data);
-            tagService.getStats().then(setStats);
-        } catch (error) {
-            console.error("Failed to fetch tags:", error);
-        }
-    };
-
+    // Handlers
     const handleOpenModal = (tag?: Tag) => {
         setEditingTag(tag || null);
         setIsModalOpen(true);
@@ -81,33 +65,49 @@ export default function TagsPage() {
     };
 
     return (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-gray-800">Quản lý Thẻ (Tags)</h2>
-                    <p className="text-sm text-gray-500">Gán nhãn cho các bài viết để tăng khả năng tìm kiếm</p>
+                    <h2 className="text-xl font-bold text-gray-800">Danh sách thẻ</h2>
+                    <p className="text-sm text-gray-500">Quản lý các thẻ (tags) để gắn vào bài viết.</p>
                 </div>
                 <button
                     onClick={() => handleOpenModal()}
-                    className="flex items-center justify-center space-x-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-all shadow-sm hover:shadow-md active:scale-95"
+                    className="flex items-center justify-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-all shadow-sm hover:shadow-md active:scale-95"
                 >
                     <FiPlus />
                     <span>Thêm thẻ mới</span>
                 </button>
             </div>
 
-            <TagStatsSection stats={stats} loading={loading} />
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-1">
+                <TagActions
+                    searchQuery={searchQuery}
+                    onSearch={handleSearch}
+                    limit={pagination.limit}
+                    totalRows={pagination.total_rows}
+                    onLimitChange={handleLimitChange}
+                />
 
-            <div className="p-6">
-                <TagGrid
+                <TagTable
                     tags={tags}
                     loading={loading}
+                    sortField={sortField}
+                    sortOrder={sortOrder}
+                    onSort={handleSort}
                     onEdit={handleOpenModal}
                     onDelete={handleOpenDeleteModal}
                 />
+
+                <Pagination
+                    currentPage={pagination.page}
+                    totalPages={pagination.total_pages}
+                    onPageChange={handlePageChange}
+                />
+
+                <div className="h-4"></div>
             </div>
 
-            {/* Modals */}
             <TagModal
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}

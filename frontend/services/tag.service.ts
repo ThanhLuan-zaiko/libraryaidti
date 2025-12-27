@@ -15,9 +15,34 @@ export interface TagStats {
     usage_count: number;
 }
 
+export interface Pagination {
+    page: number;
+    limit: number;
+    total_rows: number;
+    total_pages: number;
+}
+
+export interface PaginatedResult<T> {
+    data: T[];
+    pagination: Pagination;
+}
+
 export const tagService = {
     async getAll() {
         const response = await apiClient.get<Tag[]>(TAGS_URL);
+        return response.data;
+    },
+
+    async getList(params: { page: number; limit: number; search?: string; sort?: string; order?: string }) {
+        const response = await apiClient.get<PaginatedResult<Tag>>(TAGS_URL, {
+            params: {
+                page: params.page,
+                limit: params.limit,
+                q: params.search,
+                sort: params.sort,
+                order: params.order
+            }
+        });
         return response.data;
     },
 

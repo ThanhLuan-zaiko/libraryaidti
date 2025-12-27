@@ -9,20 +9,29 @@ import (
 )
 
 type Router struct {
-	articleHandler  *handler.ArticleHandler
-	categoryHandler *handler.CategoryHandler
-	tagHandler      *handler.TagHandler
-	authHandler     *handler.AuthHandler
-	statsHandler    *handler.StatsHandler
+	articleHandler   *handler.ArticleHandler
+	categoryHandler  *handler.CategoryHandler
+	tagHandler       *handler.TagHandler
+	authHandler      *handler.AuthHandler
+	statsHandler     *handler.StatsHandler
+	dashboardHandler *handler.DashboardHandler
 }
 
-func NewRouter(articleHandler *handler.ArticleHandler, categoryHandler *handler.CategoryHandler, tagHandler *handler.TagHandler, authHandler *handler.AuthHandler, statsHandler *handler.StatsHandler) *Router {
+func NewRouter(
+	articleHandler *handler.ArticleHandler,
+	categoryHandler *handler.CategoryHandler,
+	tagHandler *handler.TagHandler,
+	authHandler *handler.AuthHandler,
+	statsHandler *handler.StatsHandler,
+	dashboardHandler *handler.DashboardHandler,
+) *Router {
 	return &Router{
-		articleHandler:  articleHandler,
-		categoryHandler: categoryHandler,
-		tagHandler:      tagHandler,
-		authHandler:     authHandler,
-		statsHandler:    statsHandler,
+		articleHandler:   articleHandler,
+		categoryHandler:  categoryHandler,
+		tagHandler:       tagHandler,
+		authHandler:      authHandler,
+		statsHandler:     statsHandler,
+		dashboardHandler: dashboardHandler,
 	}
 }
 
@@ -107,6 +116,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 			// Admin Stats
 			protected.GET("/admin/dashboard", r.statsHandler.GetDashboardData)
+			protected.GET("/admin/analytics", r.dashboardHandler.GetAnalytics)
 		}
 	}
 }
