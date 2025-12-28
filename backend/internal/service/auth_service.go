@@ -5,7 +5,6 @@ import (
 	"backend/internal/repository"
 	"backend/internal/utils"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -47,12 +46,10 @@ func (s *AuthService) Register(email, password, fullName string) error {
 }
 
 type LoginResponse struct {
-	AccessToken  string      `json:"access_token"`
-	RefreshToken string      `json:"refresh_token"`
-	User         domain.User `json:"user"`
+	User domain.User `json:"user"`
 }
 
-func (s *AuthService) Login(email, password, ip, userAgent string) (*LoginResponse, error) {
+func (s *AuthService) Login(email, password string) (*domain.User, error) {
 	user, err := s.repo.GetUserByEmail(email)
 	if err != nil {
 		return nil, errors.New("email hoặc mật khẩu không chính xác")
@@ -63,62 +60,7 @@ func (s *AuthService) Login(email, password, ip, userAgent string) (*LoginRespon
 		return nil, errors.New("email hoặc mật khẩu không chính xác")
 	}
 
-	roles := make([]string, len(user.Roles))
-	for i, r := range user.Roles {
-		roles[i] = r.Name
-	}
-
-	accessToken, err := utils.GenerateToken(user.ID, user.Email, roles, time.Minute*10) // 10m for access token
-	if err != nil {
-		return nil, err
-	}
-
-	refreshTokenVal, err := utils.GenerateRefreshToken()
-	if err != nil {
-		return nil, err
-	}
-
-	session := &domain.UserSession{
-		UserID:       user.ID,
-		RefreshToken: refreshTokenVal,
-		IPAddress:    ip,
-		UserAgent:    userAgent,
-		ExpiresAt:    time.Now().Add(time.Hour * 24 * 14), // 14 days
-	}
-
-	if err := s.repo.CreateSession(session); err != nil {
-		return nil, err
-	}
-
-	return &LoginResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshTokenVal,
-		User:         *user,
-	}, nil
-}
-
-func (s *AuthService) RefreshToken(refreshToken string) (string, error) {
-	session, err := s.repo.GetSessionByToken(refreshToken)
-	if err != nil {
-		return "", errors.New("mã token làm mới không hợp lệ")
-	}
-
-	if time.Now().After(session.ExpiresAt) {
-		s.repo.DeleteSession(refreshToken)
-		return "", errors.New("mã token làm mới đã hết hạn")
-	}
-
-	user, err := s.repo.GetUserByID(session.UserID)
-	if err != nil {
-		return "", err
-	}
-
-	roles := make([]string, len(user.Roles))
-	for i, r := range user.Roles {
-		roles[i] = r.Name
-	}
-
-	return utils.GenerateToken(user.ID, user.Email, roles, time.Minute*10)
+	return user, nil
 }
 
 func (s *AuthService) UpdateProfile(userID uuid.UUID, fullName string) error {
@@ -149,8 +91,4 @@ func (s *AuthService) ChangePassword(userID uuid.UUID, oldPassword, newPassword 
 
 	user.PasswordHash = hashedPassword
 	return s.repo.UpdateUser(user)
-}
-
-func (s *AuthService) Logout(refreshToken string) error {
-	return s.repo.DeleteSession(refreshToken)
 }

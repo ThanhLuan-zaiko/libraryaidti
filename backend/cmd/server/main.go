@@ -11,6 +11,7 @@ import (
 	"backend/internal/repository"
 	"backend/internal/router"
 	"backend/internal/service"
+	"backend/internal/session"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,6 +23,9 @@ func main() {
 	// 2. Initialize Database
 	db.InitDB(cfg)
 
+	// Initialize Session
+	session.InitSession(db.DB)
+
 	// 3. Auto Migration
 	err := db.DB.AutoMigrate(
 		&domain.Article{},
@@ -30,7 +34,6 @@ func main() {
 		&domain.User{},
 		&domain.Role{},
 		&domain.Permission{},
-		&domain.UserSession{},
 	)
 	if err != nil {
 		log.Fatalf("AutoMigration failed: %v", err)
@@ -77,7 +80,8 @@ func main() {
 
 	// 6. Start Server
 	log.Printf("Server starting on port %s", cfg.ServerPort)
-	if err := r.Run(":" + cfg.ServerPort); err != nil {
+	handler := session.SessionManager.LoadAndSave(r)
+	if err := http.ListenAndServe(":"+cfg.ServerPort, handler); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }

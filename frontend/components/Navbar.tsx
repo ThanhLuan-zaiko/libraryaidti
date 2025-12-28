@@ -8,9 +8,11 @@ import { IoLogOutOutline, IoPersonOutline } from 'react-icons/io5';
 import AuthModal from './AuthModal';
 import ProfileModal from './ProfileModal';
 import { authService } from '@/services/auth.service';
+import { useAuth } from '@/hooks/useAuth';
 
 const Navbar = () => {
     const pathname = usePathname();
+    const { user, logout } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
 
@@ -19,7 +21,6 @@ const Navbar = () => {
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
     const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
-    const [user, setUser] = useState<any>(null);
 
     // Handle scroll effect
     useEffect(() => {
@@ -27,9 +28,6 @@ const Navbar = () => {
             setIsScrolled(window.scrollY > 10);
         };
         window.addEventListener('scroll', handleScroll);
-
-        // Sync user state
-        setUser(authService.getCurrentUser());
 
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
@@ -39,9 +37,8 @@ const Navbar = () => {
         return null;
     }
 
-    const handleLogout = () => {
-        authService.logout();
-        setUser(null);
+    const handleLogout = async () => {
+        await logout();
         window.location.reload();
     };
 
@@ -101,7 +98,7 @@ const Navbar = () => {
                             <IoPersonOutline size={20} />
                             <span className="font-semibold">Thông tin tài khoản</span>
                         </button>
-                        {user.roles && user.roles.some((r: any) => (typeof r === 'string' ? r === 'ADMIN' : r.name === 'ADMIN')) && (
+                        {user.roles && user.roles.includes('ADMIN') && (
                             <Link
                                 href="/admin"
                                 onClick={() => setIsOpen(false)}
@@ -154,7 +151,7 @@ const Navbar = () => {
                                     <IoPersonOutline size={18} />
                                     <span>Thông tin & Mật khẩu</span>
                                 </button>
-                                {user.roles && user.roles.some((r: any) => (typeof r === 'string' ? r === 'ADMIN' : r.name === 'ADMIN')) && (
+                                {user.roles && user.roles.includes('ADMIN') && (
                                     <Link
                                         href="/admin"
                                         onClick={() => setIsProfileDropdownOpen(false)}

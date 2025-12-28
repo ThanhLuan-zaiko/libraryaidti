@@ -2,8 +2,8 @@ package handler
 
 import (
 	"backend/internal/service"
+	"backend/internal/session"
 	"net/http"
-
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -51,58 +51,39 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	ip := c.ClientIP()
-	userAgent := c.GetHeader("User-Agent")
-
-	res, err := h.authService.Login(req.Email, req.Password, ip, userAgent)
+	user, err := h.authService.Login(req.Email, req.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Set HttpOnly cookies for tokens
-	// MaxAge: 10m for access_token, 14 days for refresh_token
-	c.SetCookie("access_token", res.AccessToken, 60*10, "/", "", false, true)
-	c.SetCookie("refresh_token", res.RefreshToken, 3600*24*14, "/", "", false, true)
+	// Store user info in session
+	roles := make([]string, len(user.Roles))
+	for i, r := range user.Roles {
+		roles[i] = r.Name
+	}
 
-	// Return user info only, tokens are in cookies
+	session.SessionManager.Put(c.Request.Context(), "user_id", user.ID)
+	session.SessionManager.Put(c.Request.Context(), "email", user.Email)
+	session.SessionManager.Put(c.Request.Context(), "roles", roles)
+	session.SessionManager.Put(c.Request.Context(), "full_name", user.FullName)
+
 	c.JSON(http.StatusOK, gin.H{
-		"user": res.User,
+		"user": gin.H{
+			"id":        user.ID,
+			"email":     user.Email,
+			"roles":     roles,
+			"full_name": user.FullName,
+		},
 	})
 }
 
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
-}
-
-func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	refreshToken, err := c.Cookie("refresh_token")
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Không tìm thấy token làm mới"})
-		return
-	}
-
-	accessToken, err := h.authService.RefreshToken(refreshToken)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Update access_token cookie
-	c.SetCookie("access_token", accessToken, 60*10, "/", "", false, true)
-
-	c.JSON(http.StatusOK, gin.H{"message": "Làm mới token thành công"})
-}
-
 func (h *AuthHandler) Logout(c *gin.Context) {
-	refreshToken, err := c.Cookie("refresh_token")
-	if err == nil {
-		h.authService.Logout(refreshToken)
+	err := session.SessionManager.Destroy(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng xuất"})
+		return
 	}
-
-	// Clear cookies
-	c.SetCookie("access_token", "", -1, "/", "", false, true)
-	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đăng xuất thành công"})
 }
@@ -139,6 +120,9 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
+	// Update session data
+	session.SessionManager.Put(c.Request.Context(), "full_name", req.FullName)
+
 	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật tên thành công"})
 }
 
@@ -171,4 +155,22 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đổi mật khẩu thành công"})
+}
+
+func (h *AuthHandler) GetMe(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	email, _ := c.Get("email")
+	roles, _ := c.Get("roles")
+
+	// Get full_name from session
+	fullName := session.SessionManager.GetString(c.Request.Context(), "full_name")
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":        userID,
+			"email":     email,
+			"roles":     roles,
+			"full_name": fullName,
+		},
+	})
 }

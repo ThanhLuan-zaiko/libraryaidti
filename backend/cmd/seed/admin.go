@@ -26,7 +26,6 @@ func main() {
 		&domain.User{},
 		&domain.Role{},
 		&domain.Permission{},
-		&domain.UserSession{},
 	)
 	if err != nil {
 		log.Fatalf("AutoMigration failed: %v", err)

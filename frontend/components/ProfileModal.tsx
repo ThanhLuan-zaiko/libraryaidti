@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { IoClose, IoEyeOutline, IoEyeOffOutline } from 'react-icons/io5';
 import { authService } from '@/services/auth.service';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ProfileModalProps {
     isOpen: boolean;
@@ -11,6 +12,7 @@ interface ProfileModalProps {
 }
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) => {
+    const { refreshUser } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -25,6 +27,20 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
         new_password: '',
         confirm_password: ''
     });
+
+    const getPasswordStrength = (pass: string) => {
+        if (!pass) return { score: 0, label: '', color: 'bg-gray-200' };
+        let score = 0;
+        if (pass.length > 8) score++;
+        if (/[A-Z]/.test(pass)) score++;
+        if (/[0-9]/.test(pass)) score++;
+        if (/[^A-Za-z0-9]/.test(pass)) score++;
+
+        if (score <= 1) return { score: 25, label: 'Yếu', color: 'bg-red-500' };
+        if (score === 2) return { score: 50, label: 'Trung bình', color: 'bg-yellow-500' };
+        if (score === 3) return { score: 75, label: 'Mạnh', color: 'bg-green-500' };
+        return { score: 100, label: 'Rất mạnh', color: 'bg-blue-500' };
+    };
 
     // Sync user data when modal opens or user changes
     React.useEffect(() => {
@@ -51,8 +67,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
         setSuccess('');
 
         try {
-            let profileChanged = profileData.full_name !== user?.full_name;
-            let passwordAttempted = passwordData.new_password !== '';
+            let profileChanged = profileData.full_name.trim() !== (user?.full_name || '').trim();
+            let passwordAttempted = passwordData.new_password.length > 0;
 
             if (!profileChanged && !passwordAttempted) {
                 setError('Bạn chưa thay đổi thông tin nào');
@@ -68,7 +84,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
                     return;
                 }
                 if (passwordData.new_password !== passwordData.confirm_password) {
-                    setError('Mật khẩu xác nhận không khớp');
+                    setError('Mật khẩu mới và xác nhận mật khẩu không khớp');
                     setLoading(false);
                     return;
                 }
@@ -86,8 +102,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
             setSuccess('Cập nhật thông tin thành công!');
             setPasswordData({ old_password: '', new_password: '', confirm_password: '' });
 
-            // Note: In a real app, you might want to trigger a user state sync here
-            // window.location.reload(); // Or use a context to update
+            // Refresh global user state
+            await refreshUser();
         } catch (err: any) {
             setError(err.response?.data?.error || 'Đã có lỗi xảy ra');
         } finally {
@@ -121,7 +137,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
                                     <input
                                         type="text"
                                         value={profileData.full_name}
-                                        onChange={(e) => setProfileData({ full_name: e.target.value })}
+                                        onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
                                         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-black focus:ring-0 transition-all outline-none text-sm"
                                         placeholder="Nhập họ và tên"
                                         required
@@ -154,6 +170,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
                                             onChange={(e) => setPasswordData({ ...passwordData, old_password: e.target.value })}
                                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-black focus:ring-0 transition-all outline-none text-sm"
                                             placeholder="Nhập mật khẩu cũ nếu muốn đổi"
+                                            autoComplete="current-password"
                                         />
                                         <button
                                             type="button"
@@ -174,6 +191,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
                                             onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
                                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-black focus:ring-0 transition-all outline-none text-sm"
                                             placeholder="Nhập mật khẩu mới"
+                                            autoComplete="new-password"
                                         />
                                         <button
                                             type="button"
@@ -184,6 +202,22 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
                                             {showPassword ? <IoEyeOffOutline size={20} /> : <IoEyeOutline size={20} />}
                                         </button>
                                     </div>
+                                    {passwordData.new_password && (
+                                        <div className="mt-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                                            <div className="flex justify-between items-center px-0.5">
+                                                <span className="text-[10px] font-black uppercase tracking-tighter text-gray-400">Độ mạnh mật khẩu</span>
+                                                <span className={`text-[10px] font-black uppercase tracking-tighter ${getPasswordStrength(passwordData.new_password).color.replace('bg-', 'text-')}`}>
+                                                    {getPasswordStrength(passwordData.new_password).label}
+                                                </span>
+                                            </div>
+                                            <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full ${getPasswordStrength(passwordData.new_password).color} transition-all duration-500 ease-out`}
+                                                    style={{ width: `${getPasswordStrength(passwordData.new_password).score}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-sm font-medium text-gray-700">Xác nhận mật khẩu mới</label>
@@ -192,8 +226,12 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
                                             type={showPassword ? 'text' : 'password'}
                                             value={passwordData.confirm_password}
                                             onChange={(e) => setPasswordData({ ...passwordData, confirm_password: e.target.value })}
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-black focus:ring-0 transition-all outline-none text-sm"
+                                            className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-all outline-none text-sm ${passwordData.confirm_password && passwordData.new_password !== passwordData.confirm_password
+                                                ? 'border-red-500 focus:border-red-500'
+                                                : 'border-gray-200 focus:border-black'
+                                                }`}
                                             placeholder="Xác nhận mật khẩu mới"
+                                            autoComplete="new-password"
                                         />
                                         <button
                                             type="button"
@@ -204,6 +242,11 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) =>
                                             {showPassword ? <IoEyeOffOutline size={20} /> : <IoEyeOutline size={20} />}
                                         </button>
                                     </div>
+                                    {passwordData.confirm_password && passwordData.new_password !== passwordData.confirm_password && (
+                                        <p className="text-[11px] text-red-500 font-medium ml-1 mt-1 animate-in slide-in-from-top-1 duration-200">
+                                            Mật khẩu xác nhận không khớp
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </section>

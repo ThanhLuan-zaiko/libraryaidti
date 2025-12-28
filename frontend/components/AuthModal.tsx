@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { IoClose, IoEyeOutline, IoEyeOffOutline } from 'react-icons/io5';
 import { authService } from '@/services/auth.service';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AuthModalProps {
     isOpen: boolean;
@@ -11,6 +12,7 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTab = 'login' }) => {
+    const { login } = useAuth();
     const [activeTab, setActiveTab] = useState<'login' | 'register'>(initialTab);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -50,13 +52,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTab = 'lo
 
         try {
             if (activeTab === 'login') {
-                const res = await authService.login({
+                await login({
                     email: formData.email,
                     password: formData.password
                 });
-                console.log('Login success:', res);
                 onClose();
-                window.location.reload();
             } else {
                 if (formData.password !== formData.confirm_password) {
                     setError('Mật khẩu xác nhận không khớp');

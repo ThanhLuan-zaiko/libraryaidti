@@ -46,23 +46,6 @@ func (r *AuthRepository) GetRoleByName(name string) (*domain.Role, error) {
 	return &role, nil
 }
 
-func (r *AuthRepository) CreateSession(session *domain.UserSession) error {
-	return r.db.Create(session).Error
-}
-
-func (r *AuthRepository) GetSessionByToken(token string) (*domain.UserSession, error) {
-	var session domain.UserSession
-	err := r.db.Where("refresh_token = ?", token).First(&session).Error
-	if err != nil {
-		return nil, err
-	}
-	return &session, nil
-}
-
-func (r *AuthRepository) DeleteSession(token string) error {
-	return r.db.Where("refresh_token = ?", token).Delete(&domain.UserSession{}).Error
-}
-
 func (r *AuthRepository) UpdateUser(user *domain.User) error {
 	return r.db.Save(user).Error
 }

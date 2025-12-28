@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { authService } from "@/services/auth.service";
+import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
 import {
     HiOutlineViewGrid,
@@ -22,7 +23,7 @@ export default function AdminLayout({
 }) {
     const router = useRouter();
     const pathname = usePathname();
-    const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+    const { user, loading } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     // Auto-close sidebar on mobile by default
@@ -41,15 +42,14 @@ export default function AdminLayout({
     }, []);
 
     useEffect(() => {
-        const user = authService.getCurrentUser();
-        if (!user || !user.roles || !user.roles.some((r: any) => (typeof r === 'string' ? r === 'ADMIN' : r.name === 'ADMIN'))) {
-            router.push("/");
-        } else {
-            setIsAdmin(true);
+        if (!loading) {
+            if (!user || !user.roles || !user.roles.includes('ADMIN')) {
+                router.push("/");
+            }
         }
-    }, [router]);
+    }, [user, loading, router]);
 
-    if (isAdmin === null) {
+    if (loading || !user || !user.roles.includes('ADMIN')) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-gray-50">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -190,11 +190,11 @@ export default function AdminLayout({
 
                     <div className="flex items-center space-x-3 group cursor-pointer p-1.5 pl-4 rounded-2xl hover:bg-gray-50 transition-all border border-transparent hover:border-gray-100">
                         <div className="flex flex-col items-end mr-1 hidden sm:flex">
-                            <span className="text-xs font-black text-gray-900 leading-none mb-1">{authService.getCurrentUser()?.full_name}</span>
+                            <span className="text-xs font-black text-gray-900 leading-none mb-1">{user?.full_name}</span>
                             <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-tighter">Quản trị viên</span>
                         </div>
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-blue-500 text-white flex items-center justify-center font-black text-sm shadow-lg shadow-blue-200 ring-2 ring-white">
-                            {authService.getCurrentUser()?.full_name?.charAt(0) || 'A'}
+                            {user?.full_name?.charAt(0) || 'A'}
                         </div>
                     </div>
                 </header>

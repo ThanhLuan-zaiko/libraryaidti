@@ -7,35 +7,17 @@ const apiClient = axios.create({
     withCredentials: true,
 });
 
-// Response interceptor for silent refresh
+// Response interceptor for session expiration
 apiClient.interceptors.response.use(
     (response) => response,
     async (error) => {
-        const originalRequest = error.config;
-
-        // If error is 401 and it's not a retry and not a login/refresh request
         if (
             error.response?.status === 401 &&
-            !originalRequest._retry &&
-            !originalRequest.url?.includes("/auth/login") &&
-            !originalRequest.url?.includes("/auth/refresh")
+            !error.config.url?.includes("/auth/login") &&
+            !error.config.url?.includes("/auth/me")
         ) {
-            originalRequest._retry = true;
-
-            try {
-                // Attempt to refresh token
-                await axios.post(`${API_URL}/auth/refresh`, {}, { withCredentials: true });
-
-                // Retry the original request
-                return apiClient(originalRequest);
-            } catch (refreshError) {
-                // If refresh fails, clear user data and potentially redirect to login
-                console.error("Token refresh failed:", refreshError);
-                localStorage.removeItem("user");
-                if (typeof window !== "undefined") {
-                    window.location.href = "/";
-                }
-                return Promise.reject(refreshError);
+            if (typeof window !== "undefined" && window.location.pathname !== "/") {
+                window.location.href = "/";
             }
         }
 

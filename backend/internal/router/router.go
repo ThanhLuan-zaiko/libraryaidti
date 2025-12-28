@@ -41,8 +41,9 @@ func NewRouter(
 func (r *Router) Setup(engine *gin.Engine) {
 	// CORS Middleware
 	allowedOrigins := map[string]bool{
-		"http://localhost:3000": true,
-		// Thêm các domain khác ở đây
+		"http://localhost:3000":    true,
+		"http://127.0.0.1:3000":    true,
+		"http://192.168.1.10:3000": true,
 	}
 
 	engine.Use(func(c *gin.Context) {
@@ -69,7 +70,6 @@ func (r *Router) Setup(engine *gin.Engine) {
 		{
 			auth.POST("/register", r.authHandler.Register)
 			auth.POST("/login", middleware.RateLimitMiddleware(rate.Limit(5.0/60.0), 10), r.authHandler.Login)
-			auth.POST("/refresh", r.authHandler.RefreshToken)
 			auth.POST("/logout", r.authHandler.Logout)
 		}
 
@@ -111,6 +111,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		{
 			protected.PUT("/auth/profile", r.authHandler.UpdateProfile)
 			protected.PUT("/auth/password", r.authHandler.ChangePassword)
+			protected.GET("/auth/me", r.authHandler.GetMe)
 
 			protected.GET("/protected/profile", func(c *gin.Context) {
 				email, _ := c.Get("email")

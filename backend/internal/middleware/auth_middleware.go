@@ -1,49 +1,47 @@
 package middleware
 
 import (
-	"backend/internal/utils"
+	"backend/internal/session"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		var token string
-
-		if authHeader != "" {
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) == 2 && parts[0] == "Bearer" {
-				token = parts[1]
-			}
-		}
-
-		if token == "" {
-			// Try getting from cookie
-			if cookieToken, err := c.Cookie("access_token"); err == nil {
-				token = cookieToken
-			}
-		}
-
-		if token == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Yêu cầu tiêu đề Authorization hoặc cookie access_token"})
+		userIDInterface := session.SessionManager.Get(c.Request.Context(), "user_id")
+		if userIDInterface == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Vui lòng đăng nhập"})
 			c.Abort()
 			return
 		}
 
-		claims, err := utils.ValidateToken(token)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token không hợp lệ hoặc đã hết hạn"})
-			c.Abort()
-			return
+		userID, ok := userIDInterface.(uuid.UUID)
+		if !ok {
+			// Try parsing if it was stored as string (some session stores do this)
+			if idStr, ok := userIDInterface.(string); ok {
+				var err error
+				userID, err = uuid.Parse(idStr)
+				if err != nil {
+					c.JSON(http.StatusUnauthorized, gin.H{"error": "ID người dùng không hợp lệ trong session"})
+					c.Abort()
+					return
+				}
+			} else {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Định dạng ID người dùng không hợp lệ"})
+				c.Abort()
+				return
+			}
 		}
+
+		email := session.SessionManager.GetString(c.Request.Context(), "email")
+		roles := session.SessionManager.Get(c.Request.Context(), "roles").([]string)
 
 		// Set user info in context
-		c.Set("user_id", claims.UserID)
-		c.Set("email", claims.Email)
-		c.Set("roles", claims.Roles)
+		c.Set("user_id", userID)
+		c.Set("email", email)
+		c.Set("roles", roles)
 
 		c.Next()
 	}

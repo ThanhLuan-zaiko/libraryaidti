@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   description: "Cổng thông tin tin tức và tài liệu học tập hiện đại",
 };
 
+import { AuthProvider } from "@/hooks/useAuth";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,10 +30,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-black min-h-screen`}
       >
-        <Navbar />
-        <main className="pt-20">
-          {children}
-        </main>
+        <AuthProvider>
+          <Navbar />
+          <main className="pt-20">
+            {children}
+          </main>
+        </AuthProvider>
       </body>
     </html>
   );
