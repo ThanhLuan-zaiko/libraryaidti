@@ -11,8 +11,20 @@ const apiClient = axios.create({
 apiClient.interceptors.response.use(
     (response) => response,
     async (error) => {
+        const status = error.response?.status;
+        const errorData = error.response?.data;
+
+        // Handle Account Locked (Real-time enforcement)
+        if (status === 403 && errorData?.error === "ACCOUNT_LOCKED") {
+            if (typeof window !== "undefined") {
+                // Dispatch a custom event to show the Lock Modal
+                window.dispatchEvent(new CustomEvent("account-locked"));
+            }
+            return Promise.reject(error);
+        }
+
         if (
-            error.response?.status === 401 &&
+            status === 401 &&
             !error.config.url?.includes("/auth/login") &&
             !error.config.url?.includes("/auth/me")
         ) {

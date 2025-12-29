@@ -161,9 +161,7 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	email, _ := c.Get("email")
 	roles, _ := c.Get("roles")
-
-	// Get full_name from session
-	fullName := session.SessionManager.GetString(c.Request.Context(), "full_name")
+	fullName, _ := c.Get("full_name")
 
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{

@@ -1,8 +1,10 @@
 package router
 
 import (
+	"backend/internal/domain"
 	"backend/internal/handler"
 	"backend/internal/middleware"
+	"backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
@@ -16,6 +18,8 @@ type Router struct {
 	statsHandler     *handler.StatsHandler
 	dashboardHandler *handler.DashboardHandler
 	userHandler      *handler.UserHandler
+	userRepo         domain.UserRepository
+	wsHub            *ws.Hub
 }
 
 func NewRouter(
@@ -26,6 +30,7 @@ func NewRouter(
 	statsHandler *handler.StatsHandler,
 	dashboardHandler *handler.DashboardHandler,
 	userHandler *handler.UserHandler,
+	wsHub *ws.Hub,
 ) *Router {
 	return &Router{
 		articleHandler:   articleHandler,
@@ -35,6 +40,8 @@ func NewRouter(
 		statsHandler:     statsHandler,
 		dashboardHandler: dashboardHandler,
 		userHandler:      userHandler,
+		userRepo:         userHandler.GetService().GetRepo(),
+		wsHub:            wsHub,
 	}
 }
 
@@ -73,6 +80,11 @@ func (r *Router) Setup(engine *gin.Engine) {
 			auth.POST("/logout", r.authHandler.Logout)
 		}
 
+		// WebSocket route
+		v1.GET("/ws", func(c *gin.Context) {
+			ws.ServeWs(r.wsHub, c)
+		})
+
 		// Article routes
 		articles := v1.Group("/articles")
 		{
@@ -107,7 +119,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// Protected routes
 		protected := v1.Group("")
-		protected.Use(middleware.AuthMiddleware())
+		protected.Use(middleware.AuthMiddleware(r.userRepo))
 		{
 			protected.PUT("/auth/profile", r.authHandler.UpdateProfile)
 			protected.PUT("/auth/password", r.authHandler.ChangePassword)

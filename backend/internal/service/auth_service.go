@@ -60,6 +60,10 @@ func (s *AuthService) Login(email, password string) (*domain.User, error) {
 		return nil, errors.New("email hoặc mật khẩu không chính xác")
 	}
 
+	if !user.IsActive {
+		return nil, errors.New("tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên")
+	}
+
 	return user, nil
 }
 

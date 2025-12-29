@@ -2,6 +2,7 @@ package service
 
 import (
 	"backend/internal/domain"
+	"backend/internal/ws"
 	"errors"
 
 	"github.com/google/uuid"
@@ -9,10 +10,15 @@ import (
 
 type userService struct {
 	repo domain.UserRepository
+	hub  *ws.Hub
 }
 
-func NewUserService(repo domain.UserRepository) domain.UserService {
-	return &userService{repo: repo}
+func (s *userService) GetRepo() domain.UserRepository {
+	return s.repo
+}
+
+func NewUserService(repo domain.UserRepository, hub *ws.Hub) domain.UserService {
+	return &userService{repo: repo, hub: hub}
 }
 
 func (s *userService) GetUserList(page, limit int, search, sortBy, order string, isActive *bool, roleFilter string) (*domain.PaginatedResult[domain.User], error) {
@@ -55,7 +61,14 @@ func (s *userService) UpdateUserProfile(id uuid.UUID, fullName, avatarURL string
 	}
 	user.IsActive = isActive
 
-	return s.repo.UpdateUser(user)
+	err = s.repo.UpdateUser(user)
+	if err == nil && !isActive {
+		// Emit WebSocket event if locked
+		s.hub.SendToUser(id, "account_locked", map[string]string{
+			"message": "Tài khoản của bạn đã bị khóa bởi quản trị viên.",
+		})
+	}
+	return err
 }
 
 func (s *userService) DeleteUser(id uuid.UUID) error {
@@ -71,7 +84,14 @@ func (s *userService) DeleteUser(id uuid.UUID) error {
 	}
 
 	// Soft delete by setting is_active to false
-	return s.repo.DeleteUser(id)
+	err = s.repo.DeleteUser(id)
+	if err == nil {
+		// Emit WebSocket event
+		s.hub.SendToUser(id, "account_locked", map[string]string{
+			"message": "Tài khoản của bạn đã bị khóa bởi quản trị viên.",
+		})
+	}
+	return err
 }
 
 func (s *userService) AssignUserRoles(userID uuid.UUID, roleIDs []uuid.UUID, requesterID uuid.UUID) error {
@@ -134,7 +154,14 @@ func (s *userService) AssignUserRoles(userID uuid.UUID, roleIDs []uuid.UUID, req
 		}
 	}
 
-	return s.repo.AssignRoles(userID, roleIDs, requesterID)
+	err = s.repo.AssignRoles(userID, roleIDs, requesterID)
+	if err == nil {
+		// Emit WebSocket event to target user
+		s.hub.SendToUser(userID, "role_updated", map[string]string{
+			"message": "Quyền hạn của bạn đã được cập nhật.",
+		})
+	}
+	return err
 }
 
 func (s *userService) GetUserStats() (*domain.UserStats, error) {

@@ -79,4 +79,5 @@ type UserService interface {
 	AssignUserRoles(userID uuid.UUID, roleIDs []uuid.UUID, requesterID uuid.UUID) error
 	GetUserStats() (*UserStats, error)
 	GetAvailableRoles() ([]Role, error)
+	GetRepo() UserRepository
 }

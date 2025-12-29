@@ -13,6 +13,10 @@ type UserHandler struct {
 	service domain.UserService
 }
 
+func (h *UserHandler) GetService() domain.UserService {
+	return h.service
+}
+
 func NewUserHandler(service domain.UserService) *UserHandler {
 	return &UserHandler{service: service}
 }

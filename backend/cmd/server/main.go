@@ -12,6 +12,7 @@ import (
 	"backend/internal/router"
 	"backend/internal/service"
 	"backend/internal/session"
+	"backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,6 +26,10 @@ func main() {
 
 	// Initialize Session
 	session.InitSession(db.DB)
+
+	// Initialize WebSocket Hub
+	wsHub := ws.NewHub()
+	go wsHub.Run()
 
 	// 3. Auto Migration
 	err := db.DB.AutoMigrate(
@@ -72,10 +77,10 @@ func main() {
 	dashboardHandler := handler.NewDashboardHandler(dashboardService)
 
 	userRepo := repository.NewUserRepository(db.DB)
-	userService := service.NewUserService(userRepo)
+	userService := service.NewUserService(userRepo, wsHub)
 	userHandler := handler.NewUserHandler(userService)
 
-	appRouter := router.NewRouter(articleHandler, categoryHandler, tagHandler, authHandler, statsHandler, dashboardHandler, userHandler)
+	appRouter := router.NewRouter(articleHandler, categoryHandler, tagHandler, authHandler, statsHandler, dashboardHandler, userHandler, wsHub)
 	appRouter.Setup(r)
 
 	// 6. Start Server

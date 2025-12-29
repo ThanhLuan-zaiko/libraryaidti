@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"backend/internal/domain"
 	"backend/internal/session"
 	"net/http"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(userRepo domain.UserRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDInterface := session.SessionManager.Get(c.Request.Context(), "user_id")
 		if userIDInterface == nil {
@@ -35,13 +36,30 @@ func AuthMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		email := session.SessionManager.GetString(c.Request.Context(), "email")
-		roles := session.SessionManager.Get(c.Request.Context(), "roles").([]string)
+		// Check if user exists and is active
+		user, err := userRepo.GetUserByID(userID)
+		if err != nil || !user.IsActive {
+			// Clear session
+			session.SessionManager.Destroy(c.Request.Context())
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":   "ACCOUNT_LOCKED",
+				"message": "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.",
+			})
+			c.Abort()
+			return
+		}
+
+		// Build roles list from DB to ensure real-time updates
+		roles := make([]string, len(user.Roles))
+		for i, r := range user.Roles {
+			roles[i] = r.Name
+		}
 
 		// Set user info in context
 		c.Set("user_id", userID)
-		c.Set("email", email)
+		c.Set("email", user.Email)
 		c.Set("roles", roles)
+		c.Set("full_name", user.FullName)
 
 		c.Next()
 	}
