@@ -44,6 +44,7 @@ func (i *IPRateLimiter) GetLimiter(ip string) *rate.Limiter {
 }
 
 // RateLimitMiddleware creates a middleware that limits requests by IP
+// r: requests per second, b: burst size
 func RateLimitMiddleware(r rate.Limit, b int) gin.HandlerFunc {
 	limiter := NewIPRateLimiter(r, b)
 
@@ -53,7 +54,8 @@ func RateLimitMiddleware(r rate.Limit, b int) gin.HandlerFunc {
 
 		if !l.Allow() {
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+				"error":       "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+				"retry_after": "Vài giây",
 			})
 			c.Abort()
 			return
@@ -61,4 +63,10 @@ func RateLimitMiddleware(r rate.Limit, b int) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// GlobalRateLimitMiddleware applies a general limit to all routes
+func GlobalRateLimitMiddleware() gin.HandlerFunc {
+	// 50 requests per second, burst of 100 (production-ready)
+	return RateLimitMiddleware(rate.Limit(50), 100)
 }

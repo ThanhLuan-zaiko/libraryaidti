@@ -94,24 +94,25 @@ func (r *userRepository) DeleteUser(id uuid.UUID) error {
 }
 
 func (r *userRepository) AssignRoles(userID uuid.UUID, roleIDs []uuid.UUID, assignedBy uuid.UUID) error {
-	// First, delete existing role assignments
-	if err := r.db.Where("user_id = ?", userID).Delete(&domain.UserRole{}).Error; err != nil {
-		return err
-	}
-
-	// Then, create new role assignments
-	for _, roleID := range roleIDs {
-		userRole := domain.UserRole{
-			UserID:       userID,
-			RoleID:       roleID,
-			AssignedByID: assignedBy,
-		}
-		if err := r.db.Create(&userRole).Error; err != nil {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// First, delete existing role assignments
+		if err := tx.Where("user_id = ?", userID).Delete(&domain.UserRole{}).Error; err != nil {
 			return err
 		}
-	}
 
-	return nil
+		// Then, create new role assignments
+		for _, roleID := range roleIDs {
+			userRole := domain.UserRole{
+				UserID:       userID,
+				RoleID:       roleID,
+				AssignedByID: assignedBy,
+			}
+			if err := tx.Create(&userRole).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (r *userRepository) GetRoleAssignments(userID uuid.UUID) ([]domain.UserRole, error) {

@@ -7,9 +7,10 @@ const apiClient = axios.create({
     withCredentials: true,
 });
 
-// Response interceptor for session expiration
 apiClient.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        return response;
+    },
     async (error) => {
         const status = error.response?.status;
         const errorData = error.response?.data;

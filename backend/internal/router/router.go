@@ -5,6 +5,7 @@ import (
 	"backend/internal/handler"
 	"backend/internal/middleware"
 	"backend/internal/ws"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
@@ -20,6 +21,7 @@ type Router struct {
 	userHandler      *handler.UserHandler
 	userRepo         domain.UserRepository
 	wsHub            *ws.Hub
+	cache            *middleware.ResponseCache
 }
 
 func NewRouter(
@@ -42,6 +44,7 @@ func NewRouter(
 		userHandler:      userHandler,
 		userRepo:         userHandler.GetService().GetRepo(),
 		wsHub:            wsHub,
+		cache:            middleware.NewResponseCache(),
 	}
 }
 
@@ -70,7 +73,14 @@ func (r *Router) Setup(engine *gin.Engine) {
 		c.Next()
 	})
 
+	// WebSocket route - bypass global rate limiting to avoid connection drops during navigation
+	engine.GET("/api/v1/ws", func(c *gin.Context) {
+		ws.ServeWs(r.wsHub, c)
+	})
+
 	v1 := engine.Group("/api/v1")
+	v1.Use(middleware.GlobalRateLimitMiddleware())
+	v1.Use(middleware.TimeoutMiddleware(time.Second * 30))
 	{
 		// Auth routes
 		auth := v1.Group("/auth")
@@ -79,11 +89,6 @@ func (r *Router) Setup(engine *gin.Engine) {
 			auth.POST("/login", middleware.RateLimitMiddleware(rate.Limit(5.0/60.0), 10), r.authHandler.Login)
 			auth.POST("/logout", r.authHandler.Logout)
 		}
-
-		// WebSocket route
-		v1.GET("/ws", func(c *gin.Context) {
-			ws.ServeWs(r.wsHub, c)
-		})
 
 		// Article routes
 		articles := v1.Group("/articles")
@@ -100,7 +105,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		{
 			categories.POST("", r.categoryHandler.CreateCategory)
 			categories.GET("", r.categoryHandler.GetCategories)
-			categories.GET("/stats", r.categoryHandler.GetStats) // Make sure this is before /:id to avoid conflict if id is string. ID is UUID so it might be okay, but explicitly placing before is safer.
+			categories.GET("/stats", middleware.HTTPCacheMiddleware(300), middleware.CacheMiddleware(r.cache, time.Minute*5), r.categoryHandler.GetStats)
 			categories.GET("/:id", r.categoryHandler.GetCategory)
 			categories.PUT("/:id", r.categoryHandler.UpdateCategory)
 			categories.DELETE("/:id", r.categoryHandler.DeleteCategory)
@@ -111,7 +116,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		{
 			tags.POST("", r.tagHandler.CreateTag)
 			tags.GET("", r.tagHandler.GetTags)
-			tags.GET("/stats", r.tagHandler.GetStats)
+			tags.GET("/stats", middleware.HTTPCacheMiddleware(300), middleware.CacheMiddleware(r.cache, time.Minute*5), r.tagHandler.GetStats)
 			tags.GET("/:id", r.tagHandler.GetTag)
 			tags.PUT("/:id", r.tagHandler.UpdateTag)
 			tags.DELETE("/:id", r.tagHandler.DeleteTag)
@@ -131,16 +136,16 @@ func (r *Router) Setup(engine *gin.Engine) {
 			})
 
 			// Admin Stats
-			protected.GET("/admin/dashboard", r.statsHandler.GetDashboardData)
-			protected.GET("/admin/analytics", r.dashboardHandler.GetAnalytics)
-			protected.GET("/admin/analytics/hierarchy/stats", r.dashboardHandler.GetHierarchyStats)
-			protected.GET("/admin/analytics/hierarchy/tree", r.dashboardHandler.GetCategoryTree)
+			protected.GET("/admin/dashboard", middleware.CacheMiddleware(r.cache, time.Minute), r.statsHandler.GetDashboardData)
+			protected.GET("/admin/analytics", middleware.CacheMiddleware(r.cache, time.Minute*2), r.dashboardHandler.GetAnalytics)
+			protected.GET("/admin/analytics/hierarchy/stats", middleware.CacheMiddleware(r.cache, time.Minute*5), r.dashboardHandler.GetHierarchyStats)
+			protected.GET("/admin/analytics/hierarchy/tree", middleware.CacheMiddleware(r.cache, time.Minute*10), r.dashboardHandler.GetCategoryTree)
 
 			// User Management (Admin only - Should add role check middleware later)
 			users := protected.Group("/users")
 			{
 				users.GET("", r.userHandler.GetUsers)
-				users.GET("/stats", r.userHandler.GetStats)
+				users.GET("/stats", middleware.CacheMiddleware(r.cache, time.Minute*5), r.userHandler.GetStats)
 				users.GET("/:id", r.userHandler.GetUser)
 				users.PUT("/:id", r.userHandler.UpdateUser)
 				users.DELETE("/:id", r.userHandler.DeleteUser)
