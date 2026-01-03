@@ -13,6 +13,8 @@ export interface AnalyticsData {
     total_articles: number;
     total_views: number;
     total_comments: number;
+    total_categories: number;
+    total_readers: number;
     article_trend: ArticleTrend[];
     top_categories: CategoryStats[];
     top_tags: TagStats[];
@@ -53,6 +55,35 @@ export interface DashboardData {
     category_distribution: CategoryDistribution[];
 }
 
+export interface AdvancedAnalyticsData {
+    seo_stats: {
+        missing_meta_description: number;
+        missing_og_image: number;
+        total_seo_records: number;
+    };
+    workflow_stats: {
+        status: string;
+        avg_days: number;
+    }[];
+    media_stats: {
+        total_files: number;
+        total_size: number;
+    };
+    versioning_stats: {
+        avg_edits_per_article: number;
+        total_versions: number;
+    };
+    content_graph: {
+        total_relations: number;
+        orphan_pages: number;
+        avg_links_per_article: number;
+    };
+    content_health: {
+        avg_tag_density: number;
+        good_content_length: number;
+    };
+}
+
 export const getDashboardData = async () => {
     const response = await apiClient.get<DashboardData>('/admin/dashboard');
     return response.data;
@@ -64,6 +95,11 @@ export const dashboardService = {
         return response.data;
     },
 
+    async getAdvancedAnalytics() {
+        const response = await apiClient.get<AdvancedAnalyticsData>('/admin/advanced-analytics');
+        return response.data;
+    },
+
     async getHierarchyStats() {
         const response = await apiClient.get<CategoryHierarchyStats>(`${ANALYTICS_URL}/hierarchy/stats`);
         return response.data;
@@ -71,6 +107,16 @@ export const dashboardService = {
 
     async getCategoryTree() {
         const response = await apiClient.get<CategoryTreeData>(`${ANALYTICS_URL}/hierarchy/tree`);
+        return response.data;
+    },
+
+    async getSuperDashboard() {
+        const response = await apiClient.get<SuperDashboardData>('/admin/super-dashboard');
+        return response.data;
+    },
+
+    async exportReport() {
+        const response = await apiClient.get('/admin/export-dashboard', { responseType: 'blob' });
         return response.data;
     }
 };
@@ -94,4 +140,72 @@ export interface CategoryNode {
 
 export interface CategoryTreeData {
     roots: CategoryNode[];
+}
+
+// New Dashboard Types
+export interface RoleCount {
+    role_name: string;
+    count: number;
+}
+
+export interface UserStats {
+    total_users: number;
+    active_users: number;
+    inactive_users: number;
+    role_distribution: RoleCount[];
+}
+
+export interface AuditLog {
+    id: string;
+    user_id: string;
+    action: string;
+    table_name: string;
+    record_id: string;
+    created_at: string;
+}
+
+export interface EngagementStats {
+    total_comments: number;
+    spam_comments: number;
+    deleted_comments: number;
+    total_shares: number;
+    featured_count: number;
+}
+
+export interface SystemAnalytics {
+    recent_audit_logs: AuditLog[];
+    total_logs: number;
+}
+
+export interface SuperDashboardData {
+    stats: AnalyticsData;
+    advanced: AdvancedAnalyticsData;
+    user_stats: UserStats;
+    category_tree: CategoryNode[];
+    category_hierarchy: CategoryHierarchyStats;
+    engagement: EngagementStats;
+    system: SystemAnalytics;
+    pulse: SystemPulse;
+    heatmap: ActivityHeatmap[];
+    velocity: EditorialSpeed;
+}
+
+export interface SystemPulse {
+    cpu_usage: number;
+    memory_usage: number; // in bytes
+    goroutines: number;
+    db_connections: number;
+    uptime_seconds: number;
+    last_restart: string;
+}
+
+export interface ActivityHeatmap {
+    day: string;
+    hour: number;
+    hits: number;
+}
+
+export interface EditorialSpeed {
+    draft_to_publish_days: number;
+    total_published: number;
 }

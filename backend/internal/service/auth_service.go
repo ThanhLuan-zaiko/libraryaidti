@@ -2,22 +2,27 @@ package service
 
 import (
 	"backend/internal/domain"
-	"backend/internal/repository"
 	"backend/internal/utils"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
-type AuthService struct {
-	repo *repository.AuthRepository
+type authService struct {
+	repo      domain.AuthRepository
+	auditRepo domain.AuditRepository
 }
 
-func NewAuthService(repo *repository.AuthRepository) *AuthService {
-	return &AuthService{repo: repo}
+func NewAuthService(repo domain.AuthRepository, auditRepo domain.AuditRepository) domain.AuthService {
+	return &authService{
+		repo:      repo,
+		auditRepo: auditRepo,
+	}
 }
 
-func (s *AuthService) Register(email, password, fullName string) error {
+func (s *authService) Register(email, password, fullName string) error {
 	// Check if user already exists
 	existingUser, _ := s.repo.GetUserByEmail(email)
 	if existingUser != nil {
@@ -49,25 +54,32 @@ type LoginResponse struct {
 	User domain.User `json:"user"`
 }
 
-func (s *AuthService) Login(email, password string) (*domain.User, error) {
+func (s *authService) Login(email, password string) (*domain.User, error) {
+	// Find user
 	user, err := s.repo.GetUserByEmail(email)
 	if err != nil {
-		return nil, errors.New("email hoặc mật khẩu không chính xác")
+		return nil, errors.New("invalid credentials")
 	}
 
-	match, err := utils.VerifyPassword(password, user.PasswordHash)
-	if err != nil || !match {
-		return nil, errors.New("email hoặc mật khẩu không chính xác")
+	// Verify password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return nil, errors.New("invalid credentials")
 	}
 
-	if !user.IsActive {
-		return nil, errors.New("tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên")
-	}
+	// Log Action
+	s.auditRepo.Create(&domain.AuditLog{
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		Action:    "LOGIN",
+		TableName: "users",
+		RecordID:  user.ID,
+		CreatedAt: time.Now(),
+	})
 
 	return user, nil
 }
 
-func (s *AuthService) UpdateProfile(userID uuid.UUID, fullName string) error {
+func (s *authService) UpdateProfile(userID uuid.UUID, fullName string) error {
 	user, err := s.repo.GetUserByID(userID)
 	if err != nil {
 		return errors.New("không tìm thấy người dùng")
@@ -77,26 +89,25 @@ func (s *AuthService) UpdateProfile(userID uuid.UUID, fullName string) error {
 	return s.repo.UpdateUser(user)
 }
 
-func (s *AuthService) ChangePassword(userID uuid.UUID, oldPassword, newPassword string) error {
+func (s *authService) ChangePassword(userID uuid.UUID, currentPassword, newPassword string) error {
 	user, err := s.repo.GetUserByID(userID)
-	if err != nil {
-		return errors.New("không tìm thấy người dùng")
-	}
-
-	match, err := utils.VerifyPassword(oldPassword, user.PasswordHash)
-	if err != nil || !match {
-		return errors.New("mật khẩu cũ không chính xác")
-	}
-
-	hashedPassword, err := utils.HashPassword(newPassword)
 	if err != nil {
 		return err
 	}
 
-	user.PasswordHash = hashedPassword
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return errors.New("invalid current password")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	user.PasswordHash = string(hashedPassword)
 	return s.repo.UpdateUser(user)
 }
 
-func (s *AuthService) GetMe(userID uuid.UUID) (*domain.User, error) {
+func (s *authService) GetMe(userID uuid.UUID) (*domain.User, error) {
 	return s.repo.GetUserByID(userID)
 }

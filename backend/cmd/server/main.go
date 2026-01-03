@@ -51,6 +51,8 @@ func main() {
 	}
 
 	// 4. Setup dependency injection
+	auditRepo := repository.NewAuditRepository(db.DB)
+
 	seoRepo := repository.NewSeoRepository(db.DB)
 	seoService := service.NewSeoService(seoRepo)
 
@@ -58,7 +60,7 @@ func main() {
 
 	articleRepo := repository.NewArticleRepository(db.DB)
 	categoryRepo := repository.NewCategoryRepository(db.DB)
-	articleService := service.NewArticleService(articleRepo, mediaRepo, seoService, wsHub)
+	articleService := service.NewArticleService(articleRepo, mediaRepo, auditRepo, seoService, wsHub)
 	categoryService := service.NewCategoryService(categoryRepo)
 	articleHandler := handler.NewArticleHandler(articleService)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
@@ -68,7 +70,7 @@ func main() {
 	tagHandler := handler.NewTagHandler(tagService)
 
 	authRepo := repository.NewAuthRepository(db.DB)
-	authService := service.NewAuthService(authRepo)
+	authService := service.NewAuthService(authRepo, auditRepo)
 	authHandler := handler.NewAuthHandler(authService)
 
 	statsRepo := repository.NewStatsRepository(db.DB)

@@ -14,14 +14,16 @@ import (
 type articleService struct {
 	repo       domain.ArticleRepository
 	mediaRepo  domain.MediaRepository
+	auditRepo  domain.AuditRepository
 	seoService domain.SeoService
 	hub        *ws.Hub // Directly using Hub for simplicity
 }
 
-func NewArticleService(repo domain.ArticleRepository, mediaRepo domain.MediaRepository, seoService domain.SeoService, hub *ws.Hub) domain.ArticleService {
+func NewArticleService(repo domain.ArticleRepository, mediaRepo domain.MediaRepository, auditRepo domain.AuditRepository, seoService domain.SeoService, hub *ws.Hub) domain.ArticleService {
 	return &articleService{
 		repo:       repo,
 		mediaRepo:  mediaRepo,
+		auditRepo:  auditRepo,
 		seoService: seoService,
 		hub:        hub,
 	}
@@ -55,6 +57,19 @@ func (s *articleService) CreateArticle(article *domain.Article) error {
 
 	// 4. Broadcast Event
 	s.broadcastEvent("article_created", article)
+
+	// 4. Log Action
+	if err := s.auditRepo.Create(&domain.AuditLog{
+		ID:        uuid.New(),
+		UserID:    article.AuthorID,
+		Action:    "CREATE",
+		TableName: "articles",
+		RecordID:  article.ID,
+		CreatedAt: time.Now(),
+	}); err != nil {
+		// Log error but don't fail request
+		// log.Printf("Failed to create audit log: %v", err)
+	}
 
 	return nil
 }

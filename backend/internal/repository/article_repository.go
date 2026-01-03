@@ -42,22 +42,27 @@ func (r *articleRepository) GetAll(offset, limit int, filter map[string]interfac
 		Preload("Images")
 
 	if status, ok := filter["status"]; ok && status != "" {
-		query = query.Where("status = ?", status)
+		query = query.Where("articles.status = ?", status)
 	}
 
 	if categoryID, ok := filter["category_id"]; ok && categoryID != "" {
-		query = query.Where("category_id = ?", categoryID)
+		query = query.Where("articles.category_id = ?", categoryID)
 	}
 
 	if search, ok := filter["search"]; ok && search != "" {
-		query = query.Where("title ILIKE ?", "%"+search.(string)+"%")
+		searchTerm := "%" + search.(string) + "%"
+		query = query.
+			Joins("LEFT JOIN categories ON categories.id = articles.category_id").
+			Joins("LEFT JOIN users ON users.id = articles.author_id").
+			Where("(articles.title ILIKE ? OR articles.slug ILIKE ? OR articles.summary ILIKE ? OR categories.name ILIKE ? OR users.full_name ILIKE ? OR articles.status ILIKE ?)",
+				searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	if err := query.Offset(offset).Limit(limit).Order("created_at DESC").Find(&articles).Error; err != nil {
+	if err := query.Offset(offset).Limit(limit).Order("articles.created_at DESC").Find(&articles).Error; err != nil {
 		return nil, 0, err
 	}
 

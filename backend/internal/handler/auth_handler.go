@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"backend/internal/service"
+	"backend/internal/domain"
 	"backend/internal/session"
 	"net/http"
 	"strings"
@@ -11,10 +11,10 @@ import (
 )
 
 type AuthHandler struct {
-	authService *service.AuthService
+	authService domain.AuthService
 }
 
-func NewAuthHandler(authService *service.AuthService) *AuthHandler {
+func NewAuthHandler(authService domain.AuthService) *AuthHandler {
 	return &AuthHandler{authService: authService}
 }
 
