@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"strings"
+
 	"github.com/google/uuid"
 )
 
@@ -49,6 +51,9 @@ func (s *articleService) CreateArticle(article *domain.Article) error {
 	if article.Status == domain.StatusPublished && article.PublishedAt == nil {
 		article.PublishedAt = &now
 	}
+
+	// 2.5 Auto-fill SEO Metadata
+	s.ensureSEOMetadata(article)
 
 	// 3. Create
 	if err := s.repo.Create(article); err != nil {
@@ -122,6 +127,9 @@ func (s *articleService) UpdateArticle(article *domain.Article) error {
 		article.Status = existing.Status
 	}
 
+	// Ensure SEO Metadata (OG Image might be available now after image upload)
+	s.ensureSEOMetadata(article)
+
 	if err := s.repo.Update(article); err != nil {
 		return err
 	}
@@ -129,6 +137,50 @@ func (s *articleService) UpdateArticle(article *domain.Article) error {
 	s.broadcastEvent("article_updated", article)
 
 	return nil
+}
+
+func (s *articleService) ensureSEOMetadata(article *domain.Article) {
+	if article.SEOMetadata == nil {
+		article.SEOMetadata = &domain.SeoMetadata{}
+	}
+	// Only fill if empty (Same logic as Create)
+	if article.SEOMetadata.MetaTitle == "" {
+		article.SEOMetadata.MetaTitle = article.Title
+	}
+	if article.SEOMetadata.MetaDescription == "" {
+		desc := article.Summary
+		if desc == "" && len(article.Content) > 0 {
+			if len(article.Content) > 160 {
+				desc = article.Content[:157] + "..."
+			} else {
+				desc = article.Content
+			}
+		}
+		article.SEOMetadata.MetaDescription = desc
+	}
+	if article.SEOMetadata.CanonicalURL == "" && article.Slug != "" {
+		article.SEOMetadata.CanonicalURL = "/articles/" + article.Slug
+	}
+	if article.SEOMetadata.MetaKeywords == "" && len(article.Tags) > 0 {
+		var tagNames []string
+		for _, tag := range article.Tags {
+			tagNames = append(tagNames, tag.Name)
+		}
+		article.SEOMetadata.MetaKeywords = strings.Join(tagNames, ", ")
+	}
+
+	// Always check for OG Image if it's empty
+	if article.SEOMetadata.OgImage == "" && len(article.Images) > 0 {
+		for _, img := range article.Images {
+			if img.IsPrimary {
+				article.SEOMetadata.OgImage = img.ImageURL
+				break
+			}
+		}
+		if article.SEOMetadata.OgImage == "" && len(article.Images) > 0 {
+			article.SEOMetadata.OgImage = article.Images[0].ImageURL
+		}
+	}
 }
 
 func (s *articleService) DeleteArticle(id uuid.UUID) error {

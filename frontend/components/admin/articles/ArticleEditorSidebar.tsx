@@ -1,5 +1,5 @@
 import React from 'react';
-import { HiChevronDown, HiChevronUp } from 'react-icons/hi';
+import { HiChevronDown, HiChevronUp, HiPlus, HiX, HiLightningBolt, HiPhotograph } from 'react-icons/hi';
 import { Category } from '@/services/category.service';
 import { Tag } from '@/services/tag.service';
 import { ArticleInput } from '@/services/article.service';
@@ -14,6 +14,7 @@ interface ArticleEditorSidebarProps {
     onFormDataChange: (data: Partial<ArticleInput>) => void;
     onToggleFeatured: () => void;
     onToggleSeoSection: () => void;
+    onNotify: (type: 'success' | 'error', message: string) => void;
 }
 
 const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
@@ -24,10 +25,94 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
     onFormDataChange,
     onToggleFeatured,
     onToggleSeoSection,
+    onNotify,
 }) => {
+    const [confirmOverwrite, setConfirmOverwrite] = React.useState(false);
+    const confirmTimeoutRef = React.useRef<NodeJS.Timeout>(null);
+
+    React.useEffect(() => {
+        return () => {
+            if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+        };
+    }, []);
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         onFormDataChange({ [name]: value });
+    };
+
+    const handleUsePrimaryImage = () => {
+        const primaryImage = formData.images?.find(img => img.is_primary);
+        if (primaryImage?.image_url) {
+            onFormDataChange({
+                seo_metadata: {
+                    ...formData.seo_metadata,
+                    og_image: primaryImage.image_url
+                }
+            });
+        }
+    };
+
+    const handleAutoFill = () => {
+        // 1. Validation: valid Title is required
+        if (!formData.title?.trim()) {
+            onNotify('error', 'Vui lòng nhập tiêu đề bài viết trước khi tự động tạo SEO Metadata.');
+            return;
+        }
+
+        // 2. Check for existing data & Confirmation Logic
+        const hasExistingData = formData.seo_metadata?.meta_title ||
+            formData.seo_metadata?.meta_description ||
+            formData.seo_metadata?.og_image;
+
+        if (hasExistingData && !confirmOverwrite) {
+            setConfirmOverwrite(true);
+            onNotify('error', 'Dữ liệu SEO đã tồn tại. Nhấn nút Auto-fill một lần nữa để xác nhận ghi đè.');
+
+            // Reset confirmation state after 3 seconds
+            if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+            confirmTimeoutRef.current = setTimeout(() => {
+                setConfirmOverwrite(false);
+            }, 5000) as unknown as NodeJS.Timeout; // Type assertion fix
+
+            return;
+        }
+
+        // Reset confirm state if proceed
+        setConfirmOverwrite(false);
+        if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+
+        const title = formData.title;
+        const summary = formData.summary || (formData.content ? formData.content.substring(0, 160) + '...' : '');
+        const keywords = formData.tags?.map(t => t.name).join(', ') || '';
+
+        // Simple slugify
+        const slug = title.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/đ/g, "d")
+            .replace(/[^a-z0-9\s-]/g, "")
+            .trim()
+            .replace(/\s+/g, "-");
+
+        // Primary Image
+        const primaryImage = formData.images?.find(img => img.is_primary);
+        let ogImage = primaryImage?.image_url || '';
+
+        // Check if primary image is unsaved (has data but no url)
+        // No error notification - Backend will handle it on save
+
+        // 3. Update State (Overwrite is assumed true if we passed the check above)
+        onFormDataChange({
+            seo_metadata: {
+                ...formData.seo_metadata,
+                meta_title: title,
+                meta_description: summary,
+                meta_keywords: keywords,
+                canonical_url: slug ? `/articles/${slug}` : '',
+                og_image: ogImage || formData.seo_metadata?.og_image, // Only overwrite if we found a valid new image, otherwise keep old
+            }
+        });
+
+        onNotify('success', 'Đã tự động điền thông tin SEO.');
     };
 
     return (
@@ -58,14 +143,38 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
                     onClick={onToggleSeoSection}
                 >
                     <h3 className="font-bold text-gray-900 text-base">SEO Metadata</h3>
-                    {showSeoSection ? (
-                        <HiChevronUp className="w-5 h-5 text-gray-500" />
-                    ) : (
-                        <HiChevronDown className="w-5 h-5 text-gray-500" />
-                    )}
+                    <div className="flex items-center space-x-2">
+                        {showSeoSection && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAutoFill();
+                                }}
+                                className={`text-xs px-2 py-1 rounded flex items-center transition-all ${confirmOverwrite
+                                    ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 ring-2 ring-yellow-400'
+                                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                    }`}
+                                title={confirmOverwrite ? "Nhấn lần nữa để ghi đè dữ liệu cũ" : "Tự động điền metadata từ nội dung bài viết"}
+                            >
+                                <HiLightningBolt className={`w-3 h-3 mr-1 ${confirmOverwrite ? 'animate-pulse' : ''}`} />
+                                {confirmOverwrite ? 'Xác nhận ghi đè?' : 'Auto-fill'}
+                            </button>
+                        )}
+                        {showSeoSection ? (
+                            <HiChevronUp className="w-5 h-5 text-gray-500" />
+                        ) : (
+                            <HiChevronDown className="w-5 h-5 text-gray-500" />
+                        )}
+                    </div>
                 </div>
                 {showSeoSection && (
                     <div className="mt-4 space-y-3">
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-3">
+                            <p className="text-xs text-blue-700">
+                                <span className="font-semibold">Mẹo:</span> Bạn có thể để trống các trường bên dưới. Hệ thống sẽ tự động tạo thông tin chuẩn SEO từ nội dung bài viết khi bạn lưu.
+                            </p>
+                        </div>
                         <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">Meta Title</label>
                             <input
@@ -74,8 +183,8 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
                                 onChange={(e) => onFormDataChange({
                                     seo_metadata: { ...formData.seo_metadata, meta_title: e.target.value }
                                 })}
-                                placeholder="Tiêu đề SEO..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                placeholder="Để trống để lấy tự động từ Tiêu đề bài viết..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-gray-400"
                             />
                         </div>
                         <div>
@@ -85,9 +194,9 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
                                 onChange={(e) => onFormDataChange({
                                     seo_metadata: { ...formData.seo_metadata, meta_description: e.target.value }
                                 })}
-                                placeholder="Mô tả SEO..."
+                                placeholder="Để trống để lấy tự động từ Tóm tắt hoặc Nội dung..."
                                 rows={3}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none placeholder-gray-400"
                             />
                         </div>
                         <div>
@@ -98,21 +207,36 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
                                 onChange={(e) => onFormDataChange({
                                     seo_metadata: { ...formData.seo_metadata, meta_keywords: e.target.value }
                                 })}
-                                placeholder="keyword1, keyword2, keyword3..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                placeholder="Để trống để lấy tự động từ Tags..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-gray-400"
                             />
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">OG Image URL</label>
-                            <input
-                                type="text"
-                                value={formData.seo_metadata?.og_image || ''}
-                                onChange={(e) => onFormDataChange({
-                                    seo_metadata: { ...formData.seo_metadata, og_image: e.target.value }
-                                })}
-                                placeholder="https://..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                            />
+                            <div className="flex space-x-2">
+                                <input
+                                    type="text"
+                                    value={formData.seo_metadata?.og_image || ''}
+                                    onChange={(e) => onFormDataChange({
+                                        seo_metadata: { ...formData.seo_metadata, og_image: e.target.value }
+                                    })}
+                                    placeholder="Để trống để lấy tự động từ ảnh đại diện..."
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-gray-400"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleUsePrimaryImage}
+                                    className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                                    title="Sử dụng ảnh đại diện bài viết"
+                                >
+                                    <HiPhotograph className="w-5 h-5" />
+                                </button>
+                            </div>
+                            {!formData.seo_metadata?.og_image && formData.images?.some(img => img.is_primary && !img.image_url) && (
+                                <p className="text-xs text-orange-500 mt-1 italic">
+                                    * Ảnh đại diện sẽ tự động cập nhật sau khi lưu bài viết.
+                                </p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">Canonical URL</label>
@@ -122,8 +246,8 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
                                 onChange={(e) => onFormDataChange({
                                     seo_metadata: { ...formData.seo_metadata, canonical_url: e.target.value }
                                 })}
-                                placeholder="https://..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                placeholder="Để trống để tự động tạo từ Slug..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-gray-400"
                             />
                         </div>
                     </div>

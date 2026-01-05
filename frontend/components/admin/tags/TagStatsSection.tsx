@@ -9,7 +9,7 @@ interface TagStatsSectionProps {
 }
 
 export default function TagStatsSection({ stats, loading }: TagStatsSectionProps) {
-    if (loading || stats.length === 0) return null;
+    if (loading || !stats || stats.length === 0) return null;
 
     return (
         <div className="p-6 border-b border-gray-200 bg-white">

@@ -277,6 +277,10 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                         onFormDataChange={handleFormDataChange}
                         onToggleFeatured={handleToggleFeatured}
                         onToggleSeoSection={() => setShowSeoSection(!showSeoSection)}
+                        onNotify={(type, msg) => {
+                            if (type === 'error') setError(msg);
+                            else setSuccess(msg);
+                        }}
                     />
                 </div>
             </div>

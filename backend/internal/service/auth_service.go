@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type authService struct {
@@ -58,12 +57,13 @@ func (s *authService) Login(email, password string) (*domain.User, error) {
 	// Find user
 	user, err := s.repo.GetUserByEmail(email)
 	if err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, errors.New("thông tin xác thực không hợp lệ")
 	}
 
 	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return nil, errors.New("invalid credentials")
+	isCorrect, err := utils.VerifyPassword(password, user.PasswordHash)
+	if err != nil || !isCorrect {
+		return nil, errors.New("thông tin xác thực không hợp lệ")
 	}
 
 	// Log Action
@@ -95,16 +95,17 @@ func (s *authService) ChangePassword(userID uuid.UUID, currentPassword, newPassw
 		return err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
-		return errors.New("invalid current password")
+	isCorrect, err := utils.VerifyPassword(currentPassword, user.PasswordHash)
+	if err != nil || !isCorrect {
+		return errors.New("mật khẩu hiện tại không hợp lệ")
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hashedPassword, err := utils.HashPassword(newPassword)
 	if err != nil {
 		return err
 	}
 
-	user.PasswordHash = string(hashedPassword)
+	user.PasswordHash = hashedPassword
 	return s.repo.UpdateUser(user)
 }
 
