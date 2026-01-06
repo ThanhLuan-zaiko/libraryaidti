@@ -39,6 +39,18 @@ type ArticleMediaVersion struct {
 	UsageType      string    `gorm:"type:varchar(50)" json:"usage_type"`
 }
 
+// MediaFileVersion represents the media_file_versions table
+type MediaFileVersion struct {
+	ID          uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	MediaFileID uuid.UUID `gorm:"type:uuid;not null" json:"media_file_id"`
+	FileName    string    `json:"file_name"`
+	FileURL     string    `gorm:"not null" json:"file_url"`
+	FileType    string    `gorm:"type:varchar(50)" json:"file_type"`
+	FileSize    int64     `json:"file_size"`
+	UploadedBy  uuid.UUID `gorm:"type:uuid" json:"uploaded_by"`
+	CreatedAt   time.Time `gorm:"default:now()" json:"created_at"`
+}
+
 type MediaRepository interface {
 	// Basic Media File operations (if needed, otherwise can stay in generic file repo)
 	GetMediaByID(id uuid.UUID) (*MediaFile, error)
@@ -53,6 +65,7 @@ type MediaRepository interface {
 
 	// Versioning
 	CreateMediaVersion(version *ArticleMediaVersion) error
+	CreateMediaFileVersion(version *MediaFileVersion) error
 	GetVersionsByArticleID(articleID uuid.UUID) ([]ArticleMediaVersion, error)
 
 	DeleteMediaByUrl(url string) error

@@ -24,17 +24,18 @@ func NewArticleHandler(service domain.ArticleService) *ArticleHandler {
 
 // ArticleCreateRequest represents the request DTO with base64 images
 type ArticleCreateRequest struct {
-	Title        string               `json:"title" binding:"required"`
-	Content      string               `json:"content" binding:"required"`
-	Summary      string               `json:"summary"`
-	Slug         string               `json:"slug"`
-	CategoryID   *uuid.UUID           `json:"category_id"`
-	Status       domain.ArticleStatus `json:"status"`
-	IsFeatured   bool                 `json:"is_featured"`
-	AllowComment bool                 `json:"allow_comment"`
-	Tags         []domain.Tag         `json:"tags"`
-	Images       []Base64Image        `json:"images"` // base64 images
-	SeoMetadata  *domain.SeoMetadata  `json:"seo_metadata"`
+	Title             string               `json:"title" binding:"required"`
+	Content           string               `json:"content" binding:"required"`
+	Summary           string               `json:"summary"`
+	Slug              string               `json:"slug"`
+	CategoryID        *uuid.UUID           `json:"category_id"`
+	Status            domain.ArticleStatus `json:"status"`
+	IsFeatured        bool                 `json:"is_featured"`
+	AllowComment      bool                 `json:"allow_comment"`
+	Tags              []domain.Tag         `json:"tags"`
+	Images            []Base64Image        `json:"images"` // base64 images
+	SeoMetadata       *domain.SeoMetadata  `json:"seo_metadata"`
+	RelatedArticleIDs []uuid.UUID          `json:"related_article_ids"`
 }
 
 type Base64Image struct {
@@ -77,14 +78,16 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 		}
 	}
 
-	// Create article first
+	// Create article first (which creates initial version and status log)
 	if err := h.service.CreateArticle(&article); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Process and save images
+	var mediaList []domain.ArticleMedia
 	var articleImages []domain.ArticleImage
+
 	for _, img := range req.Images {
 		if img.ImageData != "" {
 			// Process base64 image
@@ -94,13 +97,7 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 				return
 			}
 
-			articleImages = append(articleImages, domain.ArticleImage{
-				ArticleID: article.ID,
-				ImageURL:  imgInfo.URL,
-				IsPrimary: img.IsPrimary,
-			})
-
-			// Save to media_files metadata
+			// Create MediaFile entry
 			mediaFile := &domain.MediaFile{
 				FileName:   imgInfo.FileName,
 				FileURL:    imgInfo.URL,
@@ -112,20 +109,47 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image metadata: " + err.Error()})
 				return
 			}
+
+			usageType := "gallery"
+			if img.IsPrimary {
+				usageType = "thumbnail"
+			}
+
+			// Add to ArticleMedia list
+			mediaList = append(mediaList, domain.ArticleMedia{
+				ArticleID: article.ID,
+				MediaID:   mediaFile.ID,
+				UsageType: usageType,
+				Media:     mediaFile,
+			})
+
+			// Also add to ArticleImage list for article_images table
+			articleImages = append(articleImages, domain.ArticleImage{
+				ArticleID: article.ID,
+				ImageURL:  imgInfo.URL,
+				IsPrimary: img.IsPrimary,
+			})
 		}
 	}
 
-	// Update article with images
+	// Handle Related Articles
+	if len(req.RelatedArticleIDs) > 0 {
+		for _, relatedID := range req.RelatedArticleIDs {
+			article.Related = append(article.Related, &domain.Article{ID: relatedID})
+		}
+	}
+
 	article.Images = articleImages
+	article.MediaList = mediaList
 	article.Tags = req.Tags
 	if req.SeoMetadata != nil {
 		req.SeoMetadata.ArticleID = article.ID
 		article.SEOMetadata = req.SeoMetadata
 	}
 
-	// Update to save images, tags, and SEO
+	// Update to save images, tags, SEO, and relations
 	if err := h.service.UpdateArticle(&article); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update article with images"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update article with relations"})
 		return
 	}
 
@@ -206,10 +230,9 @@ func (h *ArticleHandler) UpdateArticle(c *gin.Context) {
 		return
 	}
 
-	// Capture old image URLs for cleanup
-	oldImageUrls := make(map[string]bool)
-	for _, img := range article.Images {
-		oldImageUrls[img.ImageURL] = true
+	oldMediaMap := make(map[string]domain.ArticleMedia)
+	for _, m := range article.MediaList {
+		oldMediaMap[m.Media.FileURL] = m
 	}
 
 	// Update fields
@@ -225,8 +248,8 @@ func (h *ArticleHandler) UpdateArticle(c *gin.Context) {
 		article.CategoryID = *req.CategoryID
 	}
 
-	// Synchronize images: keep existing ones from request and add new ones
-	var finalImages []domain.ArticleImage
+	// Synchronize images
+	var finalMediaList []domain.ArticleMedia
 
 	// Process images from request
 	for _, imgReq := range req.Images {
@@ -238,13 +261,7 @@ func (h *ArticleHandler) UpdateArticle(c *gin.Context) {
 				return
 			}
 
-			finalImages = append(finalImages, domain.ArticleImage{
-				ArticleID: article.ID,
-				ImageURL:  imgInfo.URL,
-				IsPrimary: imgReq.IsPrimary,
-			})
-
-			// Save to media_files metadata
+			// Create MediaFile
 			mediaFile := &domain.MediaFile{
 				FileName:   imgInfo.FileName,
 				FileURL:    imgInfo.URL,
@@ -256,48 +273,54 @@ func (h *ArticleHandler) UpdateArticle(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image metadata: " + err.Error()})
 				return
 			}
+
+			usageType := "gallery"
+			if imgReq.IsPrimary {
+				usageType = "thumbnail"
+			}
+
+			finalMediaList = append(finalMediaList, domain.ArticleMedia{
+				ArticleID: article.ID,
+				MediaID:   mediaFile.ID,
+				UsageType: usageType,
+			})
 		} else if imgReq.ImageUrl != "" {
 			// Existing image URL
-			finalImages = append(finalImages, domain.ArticleImage{
-				ArticleID: article.ID,
-				ImageURL:  imgReq.ImageUrl,
-				IsPrimary: imgReq.IsPrimary,
-			})
+			// Find corresponding MediaFile/ArticleMedia
+			if oldAM, ok := oldMediaMap[imgReq.ImageUrl]; ok {
+				// Update usage type if changed
+				if imgReq.IsPrimary {
+					oldAM.UsageType = "thumbnail"
+				} else {
+					oldAM.UsageType = "gallery"
+				}
+				finalMediaList = append(finalMediaList, oldAM)
+			}
 		}
 	}
 
-	article.Images = finalImages
+	article.MediaList = finalMediaList
 	article.Tags = req.Tags
+
+	// Related Articles
+	if len(req.RelatedArticleIDs) > 0 {
+		article.Related = nil // Clear old
+		for _, relatedID := range req.RelatedArticleIDs {
+			article.Related = append(article.Related, &domain.Article{ID: relatedID})
+		}
+	} else {
+		article.Related = nil
+	}
 
 	if req.SeoMetadata != nil {
 		req.SeoMetadata.ArticleID = article.ID
 		article.SEOMetadata = req.SeoMetadata
 	}
 
-	// Identify removed images
-	newImageUrls := make(map[string]bool)
-	for _, img := range finalImages {
-		newImageUrls[img.ImageURL] = true
-	}
-
-	var removedUrls []string
-	for url := range oldImageUrls {
-		if !newImageUrls[url] {
-			removedUrls = append(removedUrls, url)
-		}
-	}
-
+	// Update
 	if err := h.service.UpdateArticle(article); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-
-	// Cleanup removed images after successful update
-	for _, url := range removedUrls {
-		// Delete physical file
-		_ = h.imageProcessor.DeleteImage(url)
-		// Delete metadata from DB
-		_ = h.service.DeleteMediaByUrl(url)
 	}
 
 	c.JSON(http.StatusOK, article)
@@ -310,9 +333,6 @@ func (h *ArticleHandler) DeleteArticle(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
 	}
-
-	// Cleanup images before deleting article
-	h.imageProcessor.CleanupArticleImages(id.String())
 
 	if err := h.service.DeleteArticle(id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

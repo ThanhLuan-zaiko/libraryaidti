@@ -21,9 +21,15 @@ func (r *articleRepository) Create(article *domain.Article) error {
 		if err := tx.Create(article).Error; err != nil {
 			return err
 		}
-		// If there are tags, we need to associate them
+		// Associate Tags
 		if len(article.Tags) > 0 {
 			if err := tx.Model(article).Association("Tags").Replace(article.Tags); err != nil {
+				return err
+			}
+		}
+		// Associate Related
+		if len(article.Related) > 0 {
+			if err := tx.Model(article).Association("Related").Replace(article.Related); err != nil {
 				return err
 			}
 		}
@@ -39,7 +45,9 @@ func (r *articleRepository) GetAll(offset, limit int, filter map[string]interfac
 		Preload("Category").
 		Preload("Author").
 		Preload("Tags").
-		Preload("Images")
+		Preload("Images").
+		Preload("Related").
+		Preload("MediaList.Media") // Preload ArticleMedia and the internal MediaFile
 
 	if status, ok := filter["status"]; ok && status != "" {
 		query = query.Where("articles.status = ?", status)
@@ -75,9 +83,11 @@ func (r *articleRepository) GetByID(id uuid.UUID) (*domain.Article, error) {
 		Preload("Author").
 		Preload("Tags").
 		Preload("Images").
+		Preload("MediaList.Media").
 		Preload("SEOMetadata").
 		Preload("Related").
-		Preload("Versions"). // Optional: might be heavy
+		Preload("Versions").
+		Preload("StatusLogs").
 		First(&article, "id = ?", id).Error
 	if err != nil {
 		return nil, err
@@ -91,7 +101,11 @@ func (r *articleRepository) GetBySlug(slug string) (*domain.Article, error) {
 		Preload("Author").
 		Preload("Tags").
 		Preload("Images").
+		Preload("MediaList.Media").
 		Preload("SEOMetadata").
+		Preload("Related").
+		Preload("Versions").
+		Preload("StatusLogs").
 		First(&article, "slug = ?", slug).Error
 	if err != nil {
 		return nil, err
@@ -101,20 +115,49 @@ func (r *articleRepository) GetBySlug(slug string) (*domain.Article, error) {
 
 func (r *articleRepository) Update(article *domain.Article) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// Update only basic fields of the article to avoid association saving logic here
 		if err := tx.Model(article).Select("Title", "Slug", "Summary", "Content", "CategoryID", "Status", "IsFeatured", "AllowComment", "PublishedAt", "UpdatedAt", "ViewCount").
 			Updates(article).Error; err != nil {
 			return err
 		}
 
-		// Update Tags association explicitly using Replace
 		if err := tx.Model(article).Association("Tags").Replace(article.Tags); err != nil {
 			return err
 		}
 
-		// Update Images association explicitly using Replace
+		if err := tx.Model(article).Association("MediaList").Replace(article.MediaList); err != nil {
+			return err
+		}
+
+		// Handle Images association for article_images table
 		if err := tx.Model(article).Association("Images").Replace(article.Images); err != nil {
 			return err
+		}
+
+		// Handle Related articles association
+		if err := tx.Model(article).Association("Related").Replace(article.Related); err != nil {
+			return err
+		}
+
+		if len(article.Versions) > 0 {
+			for _, v := range article.Versions {
+				if v.ID == uuid.Nil {
+					v.ArticleID = article.ID
+					if err := tx.Create(&v).Error; err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		if len(article.StatusLogs) > 0 {
+			for _, l := range article.StatusLogs {
+				if l.ID == uuid.Nil {
+					l.ArticleID = article.ID
+					if err := tx.Create(&l).Error; err != nil {
+						return err
+					}
+				}
+			}
 		}
 
 		// Update SEO if exists

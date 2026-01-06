@@ -14,20 +14,22 @@ import (
 )
 
 type articleService struct {
-	repo       domain.ArticleRepository
-	mediaRepo  domain.MediaRepository
-	auditRepo  domain.AuditRepository
-	seoService domain.SeoService
-	hub        *ws.Hub // Directly using Hub for simplicity
+	repo           domain.ArticleRepository
+	mediaRepo      domain.MediaRepository
+	auditRepo      domain.AuditRepository
+	seoService     domain.SeoService
+	imageProcessor *utils.ImageProcessor
+	hub            *ws.Hub // Directly using Hub for simplicity
 }
 
 func NewArticleService(repo domain.ArticleRepository, mediaRepo domain.MediaRepository, auditRepo domain.AuditRepository, seoService domain.SeoService, hub *ws.Hub) domain.ArticleService {
 	return &articleService{
-		repo:       repo,
-		mediaRepo:  mediaRepo,
-		auditRepo:  auditRepo,
-		seoService: seoService,
-		hub:        hub,
+		repo:           repo,
+		mediaRepo:      mediaRepo,
+		auditRepo:      auditRepo,
+		seoService:     seoService,
+		imageProcessor: utils.NewImageProcessor(),
+		hub:            hub,
 	}
 }
 
@@ -52,18 +54,39 @@ func (s *articleService) CreateArticle(article *domain.Article) error {
 		article.PublishedAt = &now
 	}
 
-	// 2.5 Auto-fill SEO Metadata
+	// 3. Create Initial Version
+	article.Versions = []domain.ArticleVersion{
+		{
+			Title:         article.Title,
+			Content:       article.Content,
+			Summary:       article.Summary,
+			VersionNumber: 1,
+			CreatedBy:     article.AuthorID,
+		},
+	}
+
+	// 4. Create Initial Status Log
+	article.StatusLogs = []domain.ArticleStatusLog{
+		{
+			OldStatus: "",
+			NewStatus: article.Status,
+			ChangedBy: article.AuthorID,
+			Note:      "Article created",
+		},
+	}
+
+	// 5. Auto-fill SEO Metadata
 	s.ensureSEOMetadata(article)
 
-	// 3. Create
+	// 6. Create
 	if err := s.repo.Create(article); err != nil {
 		return err
 	}
 
-	// 4. Broadcast Event
+	// 7. Broadcast Event
 	s.broadcastEvent("article_created", article)
 
-	// 4. Log Action
+	// 8. Log Action
 	if err := s.auditRepo.Create(&domain.AuditLog{
 		ID:        uuid.New(),
 		UserID:    article.AuthorID,
@@ -72,8 +95,6 @@ func (s *articleService) CreateArticle(article *domain.Article) error {
 		RecordID:  article.ID,
 		CreatedAt: time.Now(),
 	}); err != nil {
-		// Log error but don't fail request
-		// log.Printf("Failed to create audit log: %v", err)
 	}
 
 	return nil
@@ -111,6 +132,7 @@ func (s *articleService) UpdateArticle(article *domain.Article) error {
 		}
 	}
 
+	// Versioning Check
 	if existing.Content != article.Content || existing.Title != article.Title {
 		version := domain.ArticleVersion{
 			ArticleID:     article.ID,
@@ -118,9 +140,11 @@ func (s *articleService) UpdateArticle(article *domain.Article) error {
 			Content:       existing.Content,
 			Summary:       existing.Summary,
 			VersionNumber: len(existing.Versions) + 1,
-			CreatedBy:     existing.AuthorID, // Or current user if we had context here
+			CreatedBy:     existing.AuthorID, // Note: ideally we want the updater's ID here
+			CreatedAt:     time.Now(),
 		}
-		article.Versions = append(article.Versions, version)
+		// Append to list to be saved by repo
+		article.Versions = append(existing.Versions, version)
 	}
 
 	if article.Status == "" {
@@ -130,8 +154,61 @@ func (s *articleService) UpdateArticle(article *domain.Article) error {
 	// Ensure SEO Metadata (OG Image might be available now after image upload)
 	s.ensureSEOMetadata(article)
 
+	// Detect removed media and cleanup
+	newMediaMap := make(map[uuid.UUID]bool)
+	for _, m := range article.MediaList {
+		if m.MediaID != uuid.Nil {
+			newMediaMap[m.MediaID] = true
+		}
+	}
+
+	for _, oldMedia := range existing.MediaList {
+		if !newMediaMap[oldMedia.MediaID] {
+			// Media was removed, cleanup file and record
+			if oldMedia.Media != nil {
+				s.imageProcessor.DeleteImage(oldMedia.Media.FileURL)
+				s.mediaRepo.DeleteMediaByUrl(oldMedia.Media.FileURL)
+			}
+		}
+	}
+
 	if err := s.repo.Update(article); err != nil {
 		return err
+	}
+
+	// Media Versioning (Move AFTER update to ensure IDs are populated)
+	if len(article.MediaList) > 0 {
+		for _, am := range article.MediaList {
+			// Skip if ArticleMedia ID is still nil (should be populated after Update)
+			if am.ID != uuid.Nil {
+				amVersion := domain.ArticleMediaVersion{
+					ArticleMediaID: am.ID,
+					ArticleID:      article.ID,
+					MediaID:        am.MediaID,
+					UsageType:      am.UsageType,
+				}
+				s.mediaRepo.CreateMediaVersion(&amVersion)
+
+				// Also create MediaFile version if we have the media object
+				if am.Media != nil && am.Media.ID != uuid.Nil {
+					uploadedBy := uuid.Nil
+					if am.Media.UploadedBy != nil {
+						uploadedBy = *am.Media.UploadedBy
+					}
+
+					mfVersion := domain.MediaFileVersion{
+						MediaFileID: am.MediaID,
+						FileName:    am.Media.FileName,
+						FileURL:     am.Media.FileURL,
+						FileType:    am.Media.FileType,
+						FileSize:    am.Media.FileSize,
+						UploadedBy:  uploadedBy,
+						CreatedAt:   time.Now(),
+					}
+					s.mediaRepo.CreateMediaFileVersion(&mfVersion)
+				}
+			}
+		}
 	}
 
 	s.broadcastEvent("article_updated", article)
@@ -169,21 +246,35 @@ func (s *articleService) ensureSEOMetadata(article *domain.Article) {
 		article.SEOMetadata.MetaKeywords = strings.Join(tagNames, ", ")
 	}
 
-	// Always check for OG Image if it's empty
+	// Auto-fill OG Image from article images
 	if article.SEOMetadata.OgImage == "" && len(article.Images) > 0 {
+		// Find primary image first
 		for _, img := range article.Images {
-			if img.IsPrimary {
+			if img.IsPrimary && img.ImageURL != "" {
 				article.SEOMetadata.OgImage = img.ImageURL
 				break
 			}
 		}
-		if article.SEOMetadata.OgImage == "" && len(article.Images) > 0 {
+		// If no primary found, use first image
+		if article.SEOMetadata.OgImage == "" && article.Images[0].ImageURL != "" {
 			article.SEOMetadata.OgImage = article.Images[0].ImageURL
 		}
 	}
 }
 
 func (s *articleService) DeleteArticle(id uuid.UUID) error {
+	// Get article with media to cleanup
+	article, err := s.repo.GetByID(id)
+	if err == nil && article != nil {
+		// Cleanup physical directory for this article
+		s.imageProcessor.CleanupArticleImages(id.String())
+
+		// Cleanup media records
+		for _, am := range article.MediaList {
+			s.mediaRepo.DeleteMediaByUrl(am.Media.FileURL)
+		}
+	}
+
 	if err := s.repo.Delete(id); err != nil {
 		return err
 	}
@@ -209,7 +300,6 @@ func (s *articleService) ChangeStatus(id uuid.UUID, newStatus domain.ArticleStat
 		article.PublishedAt = &now
 	}
 
-	// Create Status Log
 	log := domain.ArticleStatusLog{
 		ArticleID: id,
 		OldStatus: oldStatus,

@@ -40,11 +40,15 @@ func main() {
 		&domain.Role{},
 		&domain.Permission{},
 		&domain.MediaFile{},
+		&domain.MediaFileVersion{},
 		&domain.ArticleMedia{},
 		&domain.ArticleMediaVersion{},
+		&domain.ArticleImage{},
+		&domain.ArticleVersion{},
+		&domain.ArticleStatusLog{},
+		&domain.SeoMetadata{},
 		&domain.SeoRedirect{},
 		&domain.ArticleSeoRedirect{},
-		&domain.ArticleImage{},
 	)
 	if err != nil {
 		log.Fatalf("AutoMigration failed: %v", err)

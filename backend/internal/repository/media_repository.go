@@ -61,6 +61,10 @@ func (r *mediaRepository) CreateMediaVersion(version *domain.ArticleMediaVersion
 	return r.db.Create(version).Error
 }
 
+func (r *mediaRepository) CreateMediaFileVersion(version *domain.MediaFileVersion) error {
+	return r.db.Create(version).Error
+}
+
 func (r *mediaRepository) GetVersionsByArticleID(articleID uuid.UUID) ([]domain.ArticleMediaVersion, error) {
 	var versions []domain.ArticleMediaVersion
 	err := r.db.Where("article_id = ?", articleID).Find(&versions).Error

@@ -47,6 +47,7 @@ export interface ArticleInput {
         og_image?: string;
         canonical_url?: string;
     };
+    related_article_ids?: string[];
 }
 
 export interface Pagination {

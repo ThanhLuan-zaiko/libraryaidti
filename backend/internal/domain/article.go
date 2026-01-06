@@ -35,14 +35,16 @@ type Article struct {
 
 	// Relations
 	Images      []ArticleImage     `gorm:"foreignKey:ArticleID" json:"images"`
+	MediaList   []ArticleMedia     `gorm:"foreignKey:ArticleID" json:"media_list"`
 	Versions    []ArticleVersion   `gorm:"foreignKey:ArticleID" json:"versions"`
 	StatusLogs  []ArticleStatusLog `gorm:"foreignKey:ArticleID" json:"status_logs"`
-	Tags        []Tag              `gorm:"many2many:article_tags;" json:"tags"`
-	Related     []*Article         `gorm:"many2many:article_relations;joinForeignKey:ArticleID;joinReferences:RelatedArticleID" json:"related_articles"`
+	Tags        []Tag              `gorm:"many2many:article_tags;joinForeignKey:article_id;joinReferences:tag_id" json:"tags"`
+	Related     []*Article         `gorm:"many2many:article_relations;foreignKey:id;joinForeignKey:article_id;references:id;joinReferences:related_article_id" json:"related_articles"`
 	SEOMetadata *SeoMetadata       `gorm:"foreignKey:ArticleID" json:"seo_metadata"`
 	ViewCount   int                `gorm:"default:0" json:"view_count"` // Keep this for stats
 }
 
+// ArticleImage maps to article_images table
 type ArticleImage struct {
 	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	ArticleID uuid.UUID `gorm:"type:uuid;not null" json:"article_id"`
@@ -80,6 +82,10 @@ type SeoMetadata struct {
 	MetaKeywords    string    `gorm:"type:text" json:"meta_keywords"`
 	OgImage         string    `gorm:"type:text" json:"og_image"`
 	CanonicalURL    string    `gorm:"type:text" json:"canonical_url"`
+}
+
+func (SeoMetadata) TableName() string {
+	return "article_seo_metadata"
 }
 
 type ArticleRepository interface {
