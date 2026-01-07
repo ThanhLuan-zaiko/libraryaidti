@@ -5,11 +5,12 @@ import { Tag } from '@/services/tag.service';
 import { ArticleInput } from '@/services/article.service';
 import ImageGallery from './ImageGallery';
 import TagSelector from './TagSelector';
+import CategorySelector from './CategorySelector';
+import RelatedArticleSelector from './RelatedArticleSelector';
 
 interface ArticleEditorSidebarProps {
     formData: ArticleInput;
-    categories: Category[];
-    availableTags: Tag[];
+    articleId?: string;
     showSeoSection: boolean;
     onFormDataChange: (data: Partial<ArticleInput>) => void;
     onToggleFeatured: () => void;
@@ -19,8 +20,7 @@ interface ArticleEditorSidebarProps {
 
 const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
     formData,
-    categories,
-    availableTags,
+    articleId,
     showSeoSection,
     onFormDataChange,
     onToggleFeatured,
@@ -132,7 +132,16 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
                 <TagSelector
                     selectedTags={formData.tags || []}
                     onTagsChange={(tags) => onFormDataChange({ tags })}
-                    availableTags={availableTags}
+                />
+            </div>
+
+            {/* Related Articles */}
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="font-bold text-gray-900 mb-4 text-base">Bài viết liên quan</h3>
+                <RelatedArticleSelector
+                    selectedArticleIds={formData.related_article_ids || []}
+                    onRelatedArticlesChange={(ids) => onFormDataChange({ related_article_ids: ids })}
+                    currentArticleId={articleId}
                 />
             </div>
 
@@ -276,19 +285,10 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
                 {/* Category */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">Danh mục</label>
-                    <select
-                        name="category_id"
-                        value={formData.category_id}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                    >
-                        <option value="">-- Chọn danh mục --</option>
-                        {categories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                                {category.name}
-                            </option>
-                        ))}
-                    </select>
+                    <CategorySelector
+                        selectedCategoryId={formData.category_id || ''}
+                        onCategoryChange={(id) => onFormDataChange({ category_id: id })}
+                    />
                 </div>
 
                 {/* Featured Toggle */}

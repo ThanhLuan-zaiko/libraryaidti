@@ -170,6 +170,9 @@ func (h *ArticleHandler) GetArticles(c *gin.Context) {
 	if categoryID := c.Query("category_id"); categoryID != "" {
 		filter["category_id"] = categoryID
 	}
+	if minimal := c.Query("minimal"); minimal == "true" {
+		filter["minimal"] = true
+	}
 
 	articles, total, err := h.service.GetArticles(page, limit, filter)
 	if err != nil {

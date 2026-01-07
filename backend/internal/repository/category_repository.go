@@ -54,7 +54,7 @@ func (r *categoryRepository) GetStats() ([]domain.CategoryStats, error) {
 	return stats, err
 }
 
-func (r *categoryRepository) GetList(page, limit int, search, sortBy, order string) (*domain.PaginatedResult[domain.Category], error) {
+func (r *categoryRepository) GetList(page, limit int, search, sortBy, order string, minimal bool) (*domain.PaginatedResult[domain.Category], error) {
 	var categories []domain.Category
 	var totalRows int64
 
@@ -93,25 +93,23 @@ func (r *categoryRepository) GetList(page, limit int, search, sortBy, order stri
 	}
 
 	// Get paginated categories
-	err := query.
-		Preload("Parent").
-		Limit(limit).
-		Offset(offset).
-		Order(sortString).
-		Find(&categories).Error
+	q := query.Offset(offset).Limit(limit).Order(sortString)
+	if minimal {
+		q = q.Select("id", "name", "slug", "parent_id")
+	} else {
+		q = q.Preload("Parent")
+	}
+
+	err := q.Find(&categories).Error
 	if err != nil {
 		return nil, err
 	}
 
-	// Load all children recursively for returned categories
-	categoryIDs := make([]string, len(categories))
-	for i, cat := range categories {
-		categoryIDs[i] = cat.ID.String()
-	}
-
-	// Build full tree for each category
-	for i := range categories {
-		r.loadChildren(&categories[i])
+	if !minimal {
+		// Build full tree for each category only if not minimal
+		for i := range categories {
+			r.loadChildren(&categories[i])
+		}
 	}
 
 	return &domain.PaginatedResult[domain.Category]{

@@ -103,7 +103,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		// Article routes (Public read)
 		articles := v1.Group("/articles")
 		{
-			articles.GET("", r.articleHandler.GetArticles)
+			articles.GET("", middleware.CacheMiddleware(r.cache, time.Second*5), r.articleHandler.GetArticles)
 			articles.GET("/:id", r.articleHandler.GetArticle)
 		}
 
@@ -111,7 +111,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		categories := v1.Group("/categories")
 		{
 			categories.POST("", r.categoryHandler.CreateCategory)
-			categories.GET("", r.categoryHandler.GetCategories)
+			categories.GET("", middleware.CacheMiddleware(r.cache, time.Second*5), r.categoryHandler.GetCategories)
 			categories.GET("/stats", middleware.HTTPCacheMiddleware(300), middleware.CacheMiddleware(r.cache, time.Minute*5), r.categoryHandler.GetStats)
 			categories.GET("/:id", r.categoryHandler.GetCategory)
 			categories.PUT("/:id", r.categoryHandler.UpdateCategory)
@@ -122,7 +122,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		tags := v1.Group("/tags")
 		{
 			tags.POST("", r.tagHandler.CreateTag)
-			tags.GET("", r.tagHandler.GetTags)
+			tags.GET("", middleware.CacheMiddleware(r.cache, time.Second*5), r.tagHandler.GetTags)
 			tags.GET("/stats", middleware.HTTPCacheMiddleware(300), middleware.CacheMiddleware(r.cache, time.Minute*5), r.tagHandler.GetStats)
 			tags.GET("/:id", r.tagHandler.GetTag)
 			tags.PUT("/:id", r.tagHandler.UpdateTag)

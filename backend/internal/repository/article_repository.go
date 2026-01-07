@@ -41,13 +41,23 @@ func (r *articleRepository) GetAll(offset, limit int, filter map[string]interfac
 	var articles []domain.Article
 	var total int64
 
-	query := r.db.Model(&domain.Article{}).
-		Preload("Category").
-		Preload("Author").
-		Preload("Tags").
-		Preload("Images").
-		Preload("Related").
-		Preload("MediaList.Media") // Preload ArticleMedia and the internal MediaFile
+	query := r.db.Model(&domain.Article{})
+	minimal := false
+	if m, ok := filter["minimal"]; ok {
+		minimal = m.(bool)
+	}
+
+	if minimal {
+		query = query.Select("id", "title", "slug")
+	} else {
+		query = query.
+			Preload("Category").
+			Preload("Author").
+			Preload("Tags").
+			Preload("Images").
+			Preload("Related").
+			Preload("MediaList.Media") // Preload ArticleMedia and the internal MediaFile
+	}
 
 	if status, ok := filter["status"]; ok && status != "" {
 		query = query.Where("articles.status = ?", status)
@@ -59,11 +69,15 @@ func (r *articleRepository) GetAll(offset, limit int, filter map[string]interfac
 
 	if search, ok := filter["search"]; ok && search != "" {
 		searchTerm := "%" + search.(string) + "%"
-		query = query.
-			Joins("LEFT JOIN categories ON categories.id = articles.category_id").
-			Joins("LEFT JOIN users ON users.id = articles.author_id").
-			Where("(articles.title ILIKE ? OR articles.slug ILIKE ? OR articles.summary ILIKE ? OR categories.name ILIKE ? OR users.full_name ILIKE ? OR articles.status ILIKE ?)",
-				searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm)
+		if minimal {
+			query = query.Where("(title ILIKE ? OR slug ILIKE ?)", searchTerm, searchTerm)
+		} else {
+			query = query.
+				Joins("LEFT JOIN categories ON categories.id = articles.category_id").
+				Joins("LEFT JOIN users ON users.id = articles.author_id").
+				Where("(articles.title ILIKE ? OR articles.slug ILIKE ? OR articles.summary ILIKE ? OR categories.name ILIKE ? OR users.full_name ILIKE ? OR articles.status ILIKE ?)",
+					searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm)
+		}
 	}
 
 	if err := query.Count(&total).Error; err != nil {

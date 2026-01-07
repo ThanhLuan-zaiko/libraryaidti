@@ -40,17 +40,11 @@ func (h *CategoryHandler) GetCategories(c *gin.Context) {
 	order := c.Query("order")
 
 	if pageStr != "" || limitStr != "" || search != "" || sortBy != "" || order != "" {
-		page, err := strconv.Atoi(pageStr)
-		if err != nil {
-			page = 1
-		}
+		page, _ := strconv.Atoi(pageStr)
+		limit, _ := strconv.Atoi(limitStr)
+		minimal := c.Query("minimal") == "true"
 
-		limit, err := strconv.Atoi(limitStr)
-		if err != nil {
-			limit = 10
-		}
-
-		result, err := h.service.GetCategoryList(page, limit, search, sortBy, order)
+		result, err := h.service.GetCategoryList(page, limit, search, sortBy, order, minimal)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

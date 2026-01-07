@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { HiX } from 'react-icons/hi';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { HiX, HiChevronDown } from 'react-icons/hi';
+import { tagService } from '@/services/tag.service';
 
 interface Tag {
     id?: string;
@@ -10,28 +11,75 @@ interface Tag {
 interface TagSelectorProps {
     selectedTags: Tag[];
     onTagsChange: (tags: Tag[]) => void;
-    availableTags: Tag[];
 }
 
-const TagSelector: React.FC<TagSelectorProps> = ({ selectedTags, onTagsChange, availableTags }) => {
+// Simple debounce helper
+// Stable debounce hook
+function useDebounce<T extends (...args: any[]) => any>(callback: T, delay: number) {
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const callbackRef = useRef(callback);
+
+    useEffect(() => {
+        callbackRef.current = callback;
+    }, [callback]);
+
+    return useCallback((...args: Parameters<T>) => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => callbackRef.current(...args), delay);
+    }, [delay]);
+}
+
+const TagSelector: React.FC<TagSelectorProps> = ({ selectedTags, onTagsChange }) => {
     const [inputValue, setInputValue] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [filteredTags, setFilteredTags] = useState<Tag[]>([]);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
 
-    useEffect(() => {
-        if (inputValue.trim()) {
-            const filtered = availableTags.filter(
-                tag =>
-                    tag.id && !selectedTags.find(st => st.id === tag.id) &&
-                    tag.name.toLowerCase().includes(inputValue.toLowerCase())
+    const inputRef = useRef<HTMLInputElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    const fetchTags = async (search: string, pageNum: number, append: boolean = false) => {
+        if (isLoading) return;
+        setIsLoading(true);
+        try {
+            const result = await tagService.getList({
+                page: pageNum,
+                limit: 15,
+                search: search
+            });
+
+            // Filter out already selected tags
+            const newTags = result.data.filter(
+                t => !selectedTags.find(st => st.id === t.id)
             );
-            setFilteredTags(filtered);
-            setShowSuggestions(true);
-        } else {
-            setShowSuggestions(false);
+
+            if (append) {
+                setFilteredTags(prev => [...prev, ...newTags]);
+            } else {
+                setFilteredTags(newTags);
+            }
+
+            setHasMore(result.pagination.total_pages > pageNum);
+            setPage(pageNum);
+        } catch (error) {
+            console.error("Failed to fetch tags", error);
+        } finally {
+            setIsLoading(false);
         }
-    }, [inputValue, availableTags, selectedTags]);
+    };
+
+    const debouncedSearch = useDebounce((search: string) => {
+        fetchTags(search, 1, false);
+    }, 300);
+
+    // Initial search or search on input change
+    useEffect(() => {
+        if (showSuggestions) {
+            debouncedSearch(inputValue);
+        }
+    }, [inputValue, showSuggestions, debouncedSearch]); // Added debouncedSearch to dependency array
 
     const handleAddTag = (tag: Tag) => {
         if (!selectedTags.find(t => t.id === tag.id)) {
@@ -57,20 +105,23 @@ const TagSelector: React.FC<TagSelectorProps> = ({ selectedTags, onTagsChange, a
 
     const handleShowAllTags = () => {
         setInputValue('');
-        const allAvailable = availableTags.filter(
-            tag => tag.id && !selectedTags.find(st => st.id === tag.id)
-        );
-        setFilteredTags(allAvailable);
         setShowSuggestions(true);
         inputRef.current?.focus();
+    };
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        if (!hasMore || isLoading) return;
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop <= clientHeight + 50) {
+            fetchTags(inputValue, page + 1, true);
+        }
     };
 
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (inputRef.current && !inputRef.current.contains(event.target as Node)) {
-                const dropdown = document.querySelector('.tag-suggestions-dropdown');
-                if (dropdown && !dropdown.contains(event.target as Node)) {
+                if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                     setShowSuggestions(false);
                 }
             }
@@ -113,30 +164,46 @@ const TagSelector: React.FC<TagSelectorProps> = ({ selectedTags, onTagsChange, a
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        onFocus={() => inputValue && setShowSuggestions(true)}
+                        onFocus={() => setShowSuggestions(true)}
                         placeholder="Gõ để tìm tag..."
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     />
 
                     {/* Suggestions Dropdown */}
                     {showSuggestions && (
-                        <div className="tag-suggestions-dropdown absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        <div
+                            ref={dropdownRef}
+                            onScroll={handleScroll}
+                            className="tag-suggestions-dropdown absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto"
+                        >
                             {filteredTags.length > 0 ? (
-                                filteredTags.map(tag => (
-                                    <div
-                                        key={tag.id}
-                                        onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            handleAddTag(tag);
-                                        }}
-                                        className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 hover:text-blue-700 transition-colors"
-                                    >
-                                        {tag.name}
-                                    </div>
-                                ))
+                                <>
+                                    {filteredTags.map(tag => (
+                                        <div
+                                            key={tag.id}
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                handleAddTag(tag);
+                                            }}
+                                            className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 hover:text-blue-700 transition-colors"
+                                        >
+                                            {tag.name}
+                                        </div>
+                                    ))}
+                                    {isLoading && (
+                                        <div className="px-3 py-2 text-xs text-center text-gray-400 bg-gray-50 italic">
+                                            Đang tải...
+                                        </div>
+                                    )}
+                                    {hasMore && !isLoading && (
+                                        <div className="px-3 py-2 text-xs text-center text-gray-400 bg-gray-50 italic">
+                                            Cuộn xuống để xem thêm
+                                        </div>
+                                    )}
+                                </>
                             ) : (
-                                <div className="px-3 py-2 text-sm text-gray-500 italic">
-                                    Không tìm thấy tag phù hợp
+                                <div className="px-3 py-2 text-sm text-gray-500 italic text-center">
+                                    {isLoading ? 'Đang tìm...' : 'Không tìm thấy tag phù hợp'}
                                 </div>
                             )}
                         </div>
@@ -150,9 +217,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({ selectedTags, onTagsChange, a
                     className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                     title="Hiện tất cả tags"
                 >
-                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    <HiChevronDown className="w-4 h-4 text-gray-600" />
                 </button>
             </div>
         </div>

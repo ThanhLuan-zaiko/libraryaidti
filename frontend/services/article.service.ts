@@ -68,6 +68,7 @@ export const articleService = {
         search?: string;
         status?: string;
         category_id?: string;
+        minimal?: boolean;
     }) {
         const response = await apiClient.get<PaginatedResult<Article>>(ARTICLES_URL, {
             params

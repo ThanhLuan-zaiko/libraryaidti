@@ -40,7 +40,7 @@ func (s *categoryService) GetCategoryStats() ([]domain.CategoryStats, error) {
 	return s.repo.GetStats()
 }
 
-func (s *categoryService) GetCategoryList(page, limit int, search, sortBy, order string) (*domain.PaginatedResult[domain.Category], error) {
+func (s *categoryService) GetCategoryList(page, limit int, search, sortBy, order string, minimal bool) (*domain.PaginatedResult[domain.Category], error) {
 	if page < 1 {
 		page = 1
 	}
@@ -50,7 +50,7 @@ func (s *categoryService) GetCategoryList(page, limit int, search, sortBy, order
 	if limit > 100 {
 		limit = 100
 	}
-	return s.repo.GetList(page, limit, search, sortBy, order)
+	return s.repo.GetList(page, limit, search, sortBy, order, minimal)
 }
 
 func (s *categoryService) UpdateCategory(category *domain.Category) error {

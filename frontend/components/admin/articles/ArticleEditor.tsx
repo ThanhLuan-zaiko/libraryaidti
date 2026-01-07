@@ -15,8 +15,6 @@ interface ArticleEditorProps {
 const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData }) => {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [availableTags, setAvailableTags] = useState<Tag[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [showSeoSection, setShowSeoSection] = useState(false);
@@ -37,24 +35,12 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
             og_image: '',
             canonical_url: '',
         },
+        related_article_ids: [],
     });
 
-    // Load categories and tags
+    // Initial load logic if needed (currently managed by selectors)
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [categoriesData, tagsData] = await Promise.all([
-                    categoryService.getAll(),
-                    tagService.getAll()
-                ]);
-                setCategories(categoriesData);
-                setAvailableTags(tagsData);
-            } catch (error) {
-                console.error("Failed to load data", error);
-                setError("Không thể tải dữ liệu");
-            }
-        };
-        fetchData();
+        // Categories and Tags are now fetched by their respective selectors
     }, []);
 
     useEffect(() => {
@@ -78,6 +64,7 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                     og_image: '',
                     canonical_url: '',
                 },
+                related_article_ids: (initialData as any).related_articles?.map((a: Article) => a.id) || [],
             });
         }
     }, [initialData]);
@@ -271,8 +258,7 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                     {/* Right Column: Sidebar */}
                     <ArticleEditorSidebar
                         formData={formData}
-                        categories={categories}
-                        availableTags={availableTags}
+                        articleId={articleId}
                         showSeoSection={showSeoSection}
                         onFormDataChange={handleFormDataChange}
                         onToggleFeatured={handleToggleFeatured}

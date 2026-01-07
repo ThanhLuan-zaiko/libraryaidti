@@ -44,7 +44,7 @@ type CategoryRepository interface {
 	GetAll() ([]Category, error)
 	GetByID(id uuid.UUID) (*Category, error)
 	GetBySlug(slug string) (*Category, error)
-	GetList(page, limit int, search, sortBy, order string) (*PaginatedResult[Category], error)
+	GetList(page, limit int, search, sortBy, order string, minimal bool) (*PaginatedResult[Category], error)
 	GetStats() ([]CategoryStats, error)
 	Update(category *Category) error
 	Delete(id uuid.UUID) error
@@ -65,7 +65,7 @@ type CategoryService interface {
 	GetCategories() ([]Category, error)
 	GetCategoryByID(id uuid.UUID) (*Category, error)
 	GetCategoryBySlug(slug string) (*Category, error)
-	GetCategoryList(page, limit int, search, sortBy, order string) (*PaginatedResult[Category], error)
+	GetCategoryList(page, limit int, search, sortBy, order string, minimal bool) (*PaginatedResult[Category], error)
 	GetCategoryStats() ([]CategoryStats, error)
 	UpdateCategory(category *Category) error
 	DeleteCategory(id uuid.UUID) error
