@@ -46,11 +46,12 @@ type Article struct {
 
 // ArticleImage maps to article_images table
 type ArticleImage struct {
-	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	ArticleID uuid.UUID `gorm:"type:uuid;not null" json:"article_id"`
-	ImageURL  string    `gorm:"not null" json:"image_url"`
-	IsPrimary bool      `gorm:"default:false" json:"is_primary"`
-	CreatedAt time.Time `gorm:"default:now()" json:"created_at"`
+	ID          uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	ArticleID   uuid.UUID `gorm:"type:uuid;not null" json:"article_id"`
+	ImageURL    string    `gorm:"not null" json:"image_url"`
+	Description string    `json:"description"`
+	IsPrimary   bool      `gorm:"default:false" json:"is_primary"`
+	CreatedAt   time.Time `gorm:"default:now()" json:"created_at"`
 }
 
 type ArticleVersion struct {

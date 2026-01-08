@@ -3,6 +3,7 @@ package handler
 import (
 	"backend/internal/domain"
 	"backend/internal/utils"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -26,22 +27,23 @@ func NewArticleHandler(service domain.ArticleService) *ArticleHandler {
 type ArticleCreateRequest struct {
 	Title             string               `json:"title" binding:"required"`
 	Content           string               `json:"content" binding:"required"`
-	Summary           string               `json:"summary"`
+	Summary           string               `json:"summary" binding:"required"`
 	Slug              string               `json:"slug"`
-	CategoryID        *uuid.UUID           `json:"category_id"`
+	CategoryID        *uuid.UUID           `json:"category_id" binding:"required"`
 	Status            domain.ArticleStatus `json:"status"`
 	IsFeatured        bool                 `json:"is_featured"`
 	AllowComment      bool                 `json:"allow_comment"`
-	Tags              []domain.Tag         `json:"tags"`
-	Images            []Base64Image        `json:"images"` // base64 images
+	Tags              []domain.Tag         `json:"tags" binding:"required,min=1"`
+	Images            []Base64Image        `json:"images" binding:"required,min=1"` // base64 images
 	SeoMetadata       *domain.SeoMetadata  `json:"seo_metadata"`
 	RelatedArticleIDs []uuid.UUID          `json:"related_article_ids"`
 }
 
 type Base64Image struct {
-	ImageData string `json:"image_data"` // base64 encoded image
-	ImageUrl  string `json:"image_url"`  // existing image URL
-	IsPrimary bool   `json:"is_primary"`
+	ImageData   string `json:"image_data"` // base64 encoded image
+	ImageUrl    string `json:"image_url"`  // existing image URL
+	Description string `json:"description"`
+	IsPrimary   bool   `json:"is_primary"`
 }
 
 func (h *ArticleHandler) CreateArticle(c *gin.Context) {
@@ -80,20 +82,39 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 
 	// Create article first (which creates initial version and status log)
 	if err := h.service.CreateArticle(&article); err != nil {
+		fmt.Printf("ERROR: CreateArticle failed: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Process and save images
+	// Process and save images in parallel
 	var mediaList []domain.ArticleMedia
 	var articleImages []domain.ArticleImage
 
-	for _, img := range req.Images {
-		if img.ImageData != "" {
+	// Use a channel to collect results and a semaphore to limit concurrency
+	type processResult struct {
+		index int
+		media domain.ArticleMedia
+		img   domain.ArticleImage
+		err   error
+	}
+
+	resultsChan := make(chan processResult, len(req.Images))
+	semaphore := make(chan struct{}, 3) // Max 3 concurrent image processing tasks
+
+	for i, img := range req.Images {
+		if img.ImageData == "" {
+			continue
+		}
+
+		go func(idx int, imgReq Base64Image) {
+			semaphore <- struct{}{}        // Acquire
+			defer func() { <-semaphore }() // Release
+
 			// Process base64 image
-			imgInfo, err := h.imageProcessor.ProcessBase64Image(img.ImageData, article.ID.String())
+			imgInfo, err := h.imageProcessor.ProcessBase64Image(imgReq.ImageData, article.ID.String())
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process image: " + err.Error()})
+				resultsChan <- processResult{err: fmt.Errorf("image %d: %w", idx, err)}
 				return
 			}
 
@@ -106,35 +127,67 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 				UploadedBy: &article.AuthorID,
 			}
 			if err := h.service.CreateMediaFile(mediaFile); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image metadata: " + err.Error()})
+				resultsChan <- processResult{err: fmt.Errorf("image %d metadata: %w", idx, err)}
 				return
 			}
 
 			usageType := "gallery"
-			if img.IsPrimary {
+			if imgReq.IsPrimary {
 				usageType = "thumbnail"
 			}
 
-			// Add to ArticleMedia list
-			mediaList = append(mediaList, domain.ArticleMedia{
-				ArticleID: article.ID,
-				MediaID:   mediaFile.ID,
-				UsageType: usageType,
-				Media:     mediaFile,
-			})
+			resultsChan <- processResult{
+				index: idx,
+				media: domain.ArticleMedia{
+					ArticleID: article.ID,
+					MediaID:   mediaFile.ID,
+					UsageType: usageType,
+					Media:     mediaFile,
+				},
+				img: domain.ArticleImage{
+					ArticleID:   article.ID,
+					ImageURL:    imgInfo.URL,
+					Description: imgReq.Description,
+					IsPrimary:   imgReq.IsPrimary,
+				},
+			}
+		}(i, img)
+	}
 
-			// Also add to ArticleImage list for article_images table
-			articleImages = append(articleImages, domain.ArticleImage{
-				ArticleID: article.ID,
-				ImageURL:  imgInfo.URL,
-				IsPrimary: img.IsPrimary,
-			})
+	// Collect results and maintain order
+	tempResults := make([]processResult, len(req.Images))
+	for i := 0; i < len(req.Images); i++ {
+		if req.Images[i].ImageData == "" {
+			continue
+		}
+		res := <-resultsChan
+		if res.err != nil {
+			fmt.Printf("ERROR: Image processing failed at index %d: %v\n", res.index, res.err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process image: " + res.err.Error()})
+			return
+		}
+		tempResults[res.index] = res
+	}
+
+	for _, res := range tempResults {
+		if res.media.MediaID != uuid.Nil {
+			mediaList = append(mediaList, res.media)
+			articleImages = append(articleImages, res.img)
 		}
 	}
 
 	// Handle Related Articles
 	if len(req.RelatedArticleIDs) > 0 {
-		for _, relatedID := range req.RelatedArticleIDs {
+		// Deduplicate
+		seen := make(map[uuid.UUID]bool)
+		var uniqueIDs []uuid.UUID
+		for _, id := range req.RelatedArticleIDs {
+			if !seen[id] {
+				seen[id] = true
+				uniqueIDs = append(uniqueIDs, id)
+			}
+		}
+		for _, relatedID := range uniqueIDs {
 			article.Related = append(article.Related, &domain.Article{ID: relatedID})
 		}
 	}
@@ -149,7 +202,8 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 
 	// Update to save images, tags, SEO, and relations
 	if err := h.service.UpdateArticle(&article); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update article with relations"})
+		fmt.Printf("ERROR: UpdateArticle failed during finalize: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update article with relations: " + err.Error()})
 		return
 	}
 
@@ -242,7 +296,9 @@ func (h *ArticleHandler) UpdateArticle(c *gin.Context) {
 	article.Title = req.Title
 	article.Content = req.Content
 	article.Summary = req.Summary
-	article.Slug = req.Slug
+	if req.Slug != "" {
+		article.Slug = req.Slug
+	}
 	article.Status = req.Status
 	article.IsFeatured = req.IsFeatured
 	article.AllowComment = req.AllowComment
@@ -253,62 +309,131 @@ func (h *ArticleHandler) UpdateArticle(c *gin.Context) {
 
 	// Synchronize images
 	var finalMediaList []domain.ArticleMedia
+	var finalImageList []domain.ArticleImage
 
-	// Process images from request
-	for _, imgReq := range req.Images {
+	// Use a channel to collect results for new images
+	type processResult struct {
+		index int
+		media domain.ArticleMedia
+		img   domain.ArticleImage
+		err   error
+	}
+
+	resultsChan := make(chan processResult, len(req.Images))
+	semaphore := make(chan struct{}, 3)
+
+	for i, imgReq := range req.Images {
 		if imgReq.ImageData != "" {
-			// New base64 image
-			imgInfo, err := h.imageProcessor.ProcessBase64Image(imgReq.ImageData, article.ID.String())
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process image: " + err.Error()})
-				return
-			}
+			// New base64 image - process in parallel
+			go func(idx int, ir Base64Image) {
+				semaphore <- struct{}{}
+				defer func() { <-semaphore }()
 
-			// Create MediaFile
-			mediaFile := &domain.MediaFile{
-				FileName:   imgInfo.FileName,
-				FileURL:    imgInfo.URL,
-				FileType:   imgInfo.Type,
-				FileSize:   imgInfo.Size,
-				UploadedBy: &article.AuthorID,
-			}
-			if err := h.service.CreateMediaFile(mediaFile); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image metadata: " + err.Error()})
-				return
-			}
-
-			usageType := "gallery"
-			if imgReq.IsPrimary {
-				usageType = "thumbnail"
-			}
-
-			finalMediaList = append(finalMediaList, domain.ArticleMedia{
-				ArticleID: article.ID,
-				MediaID:   mediaFile.ID,
-				UsageType: usageType,
-			})
-		} else if imgReq.ImageUrl != "" {
-			// Existing image URL
-			// Find corresponding MediaFile/ArticleMedia
-			if oldAM, ok := oldMediaMap[imgReq.ImageUrl]; ok {
-				// Update usage type if changed
-				if imgReq.IsPrimary {
-					oldAM.UsageType = "thumbnail"
-				} else {
-					oldAM.UsageType = "gallery"
+				imgInfo, err := h.imageProcessor.ProcessBase64Image(ir.ImageData, article.ID.String())
+				if err != nil {
+					resultsChan <- processResult{err: fmt.Errorf("new image %d: %w", idx, err)}
+					return
 				}
-				finalMediaList = append(finalMediaList, oldAM)
+
+				mediaFile := &domain.MediaFile{
+					FileName:   imgInfo.FileName,
+					FileURL:    imgInfo.URL,
+					FileType:   imgInfo.Type,
+					FileSize:   imgInfo.Size,
+					UploadedBy: &article.AuthorID,
+				}
+				if err := h.service.CreateMediaFile(mediaFile); err != nil {
+					resultsChan <- processResult{err: fmt.Errorf("new image %d metadata: %w", idx, err)}
+					return
+				}
+
+				usageType := "gallery"
+				if ir.IsPrimary {
+					usageType = "thumbnail"
+				}
+
+				resultsChan <- processResult{
+					index: idx,
+					media: domain.ArticleMedia{
+						ArticleID: article.ID,
+						MediaID:   mediaFile.ID,
+						UsageType: usageType,
+						Media:     mediaFile,
+					},
+					img: domain.ArticleImage{
+						ArticleID:   article.ID,
+						ImageURL:    imgInfo.URL,
+						Description: ir.Description,
+						IsPrimary:   ir.IsPrimary,
+					},
+				}
+			}(i, imgReq)
+		} else if imgReq.ImageUrl != "" {
+			// Existing image - handle synchronously as it doesn't need heavy processing
+			if oldAM, ok := oldMediaMap[imgReq.ImageUrl]; ok {
+				usageType := "gallery"
+				if imgReq.IsPrimary {
+					usageType = "thumbnail"
+				}
+				oldAM.UsageType = usageType
+
+				resultsChan <- processResult{
+					index: i,
+					media: oldAM,
+					img: domain.ArticleImage{
+						ArticleID:   article.ID,
+						ImageURL:    imgReq.ImageUrl,
+						Description: imgReq.Description,
+						IsPrimary:   imgReq.IsPrimary,
+					},
+				}
+			} else {
+				// Possibly an image URL from another source or already deleted?
+				// For now, skip or handle as error. Let's send a dummy result to keep count.
+				resultsChan <- processResult{index: i}
 			}
+		} else {
+			// Empty entry? Send dummy to keep count.
+			resultsChan <- processResult{index: i}
+		}
+	}
+
+	// Collect all results and sort by index to preserve order
+	tempResults := make([]processResult, len(req.Images))
+	for i := 0; i < len(req.Images); i++ {
+		res := <-resultsChan
+		if res.err != nil {
+			fmt.Printf("DEBUG: Update image processing failed at index %d: %v\n", res.index, res.err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process images: " + res.err.Error()})
+			return
+		}
+		tempResults[res.index] = res
+	}
+
+	for _, res := range tempResults {
+		if res.media.MediaID != uuid.Nil || res.media.ID != uuid.Nil {
+			finalMediaList = append(finalMediaList, res.media)
+			finalImageList = append(finalImageList, res.img)
 		}
 	}
 
 	article.MediaList = finalMediaList
+	article.Images = finalImageList
 	article.Tags = req.Tags
 
 	// Related Articles
 	if len(req.RelatedArticleIDs) > 0 {
 		article.Related = nil // Clear old
-		for _, relatedID := range req.RelatedArticleIDs {
+		// Deduplicate
+		seen := make(map[uuid.UUID]bool)
+		var uniqueIDs []uuid.UUID
+		for _, id := range req.RelatedArticleIDs {
+			if !seen[id] {
+				seen[id] = true
+				uniqueIDs = append(uniqueIDs, id)
+			}
+		}
+		for _, relatedID := range uniqueIDs {
 			article.Related = append(article.Related, &domain.Article{ID: relatedID})
 		}
 	} else {

@@ -21,6 +21,7 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
 
     const [formData, setFormData] = useState<ArticleInput>({
         title: '',
+        slug: '',
         content: '',
         summary: '',
         status: 'DRAFT',
@@ -47,6 +48,7 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
         if (initialData) {
             setFormData({
                 title: initialData.title,
+                slug: initialData.slug,
                 content: initialData.content,
                 summary: initialData.summary || '',
                 status: initialData.status,
@@ -54,6 +56,7 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                 is_featured: initialData.is_featured,
                 images: initialData.images?.map(img => ({
                     image_url: img.image_url,
+                    description: img.description,
                     is_primary: img.is_primary
                 })) || [],
                 tags: (initialData as any).tags || [],
@@ -64,7 +67,7 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                     og_image: '',
                     canonical_url: '',
                 },
-                related_article_ids: (initialData as any).related_articles?.map((a: Article) => a.id) || [],
+                related_article_ids: Array.from(new Set((initialData as any).related_articles?.map((a: Article) => a.id) || [])),
             });
         }
     }, [initialData]);
@@ -89,6 +92,30 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
 
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
+
+        // Validate all required fields
+        const completion = getFormCompletion();
+        if (completion.completed < completion.total) {
+            const missingFields = Object.entries(completion.fields)
+                .filter(([_, completed]) => !completed)
+                .map(([field]) => {
+                    const names: Record<string, string> = {
+                        title: 'Tiêu đề',
+                        content: 'Nội dung',
+                        summary: 'Tóm tắt',
+                        category: 'Danh mục',
+                        images: 'Hình ảnh',
+                        tags: 'Tags'
+                    };
+                    return names[field] || field;
+                });
+
+            setError(`Vui lòng hoàn thiện các trường sau: ${missingFields.join(', ')}`);
+            // Scroll to top to see error message
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+
         setLoading(true);
         setError(null);
         setSuccess(null);

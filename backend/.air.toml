@@ -1,17 +1,17 @@
 # https://json.schemastore.org/any.json
 
-root = "."
-tmp_dir = "tmp"
-testdata_dir = "testdata"
+root = "../.."
+tmp_dir = "backend/cmd/server/tmp"
+testdata_dir = "backend/testdata"
 
 [build]
-  cmd = "go build -o tmp/server.exe ."
-  bin = "tmp/server.exe"
-  full_bin = "tmp/server.exe"
+  cmd = "go build -o ./backend/cmd/server/tmp/server.exe ./backend/cmd/server"
+  bin = "./backend/cmd/server/tmp/server.exe"
+  full_bin = "./backend/cmd/server/tmp/server.exe"
 
   delay = 1000
   include_ext = ["go", "html", "tmpl", "tpl"]
-  exclude_dir = ["tmp", "vendor", "assets", "testdata", "uploads", "cmd/server/uploads", "**/uploads"]
+  exclude_dir = ["backend/cmd/server/tmp", "vendor", "assets", "testdata", "backend/uploads"]
   exclude_regex = ["_test.go"]
 
   log = "build-errors.log"

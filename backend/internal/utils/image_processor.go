@@ -77,7 +77,9 @@ func (p *ImageProcessor) processImageBytes(data []byte, articleID string) (*Imag
 
 	// Generate filename and path
 	filename := p.generateFilename()
-	relativePath := filepath.Join("uploads", "articles", articleID, filename)
+	// When running from backend/cmd/server/, project root is ../../
+	// We want to save to project_root/uploads
+	relativePath := filepath.Join("..", "..", "uploads", "articles", articleID, filename)
 	fullPath := filepath.Join(".", relativePath)
 
 	// Create directory if not exists

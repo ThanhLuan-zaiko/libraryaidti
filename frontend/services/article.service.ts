@@ -22,12 +22,14 @@ export interface Article {
     images?: {
         id: string;
         image_url: string;
+        description?: string;
         is_primary?: boolean;
     }[];
 }
 
 export interface ArticleInput {
     title: string;
+    slug?: string;
     content: string;
     summary?: string;
     category_id?: string;
@@ -37,6 +39,7 @@ export interface ArticleInput {
     images?: {
         image_url?: string;
         image_data?: string;
+        description?: string;
         is_primary?: boolean;
     }[];
     tags?: { id?: string; name: string; slug?: string }[];

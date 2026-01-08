@@ -123,6 +123,7 @@ func (s *articleService) GetArticleBySlug(slug string) (*domain.Article, error) 
 func (s *articleService) UpdateArticle(article *domain.Article) error {
 	existing, err := s.repo.GetByID(article.ID)
 	if err != nil {
+		fmt.Printf("DEBUG: GetByID failed in UpdateArticle: %v\n", err)
 		return err
 	}
 

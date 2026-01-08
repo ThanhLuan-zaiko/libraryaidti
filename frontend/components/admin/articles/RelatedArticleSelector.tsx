@@ -43,19 +43,22 @@ const RelatedArticleSelector: React.FC<RelatedArticleSelectorProps> = ({
     // Fetch details for already selected articles
     useEffect(() => {
         const fetchSelectedDetails = async () => {
-            if (selectedArticleIds.length === 0) {
+            // Deduplicate IDs from parent
+            const uniqueIds = Array.from(new Set(selectedArticleIds));
+
+            if (uniqueIds.length === 0) {
                 setSelectedArticles([]);
                 return;
             }
 
             // If we already have some in state, only fetch missing ones
             const existingIds = selectedArticles.map(a => a.id);
-            const missingIds = selectedArticleIds.filter(id => !existingIds.includes(id));
+            const missingIds = uniqueIds.filter(id => !existingIds.includes(id));
 
             if (missingIds.length === 0) {
                 // If we have extra in state (removed by parent), filter state
-                if (selectedArticles.length !== selectedArticleIds.length) {
-                    setSelectedArticles(prev => prev.filter(a => selectedArticleIds.includes(a.id)));
+                if (selectedArticles.length !== uniqueIds.length) {
+                    setSelectedArticles(prev => prev.filter(a => uniqueIds.includes(a.id)));
                 }
                 return;
             }
@@ -65,7 +68,17 @@ const RelatedArticleSelector: React.FC<RelatedArticleSelectorProps> = ({
                 const details = await Promise.all(
                     missingIds.map(id => articleService.getById(id))
                 );
-                setSelectedArticles(prev => [...prev.filter(a => selectedArticleIds.includes(a.id)), ...details]);
+
+                setSelectedArticles(prev => {
+                    const combined = [...prev.filter(a => uniqueIds.includes(a.id)), ...details];
+                    // Final safety deduplication by ID
+                    const seen = new Set();
+                    return combined.filter(a => {
+                        if (seen.has(a.id)) return false;
+                        seen.add(a.id);
+                        return true;
+                    });
+                });
             } catch (error) {
                 console.error("Failed to fetch selected article details", error);
             }

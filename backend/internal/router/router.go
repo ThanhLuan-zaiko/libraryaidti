@@ -78,7 +78,8 @@ func (r *Router) Setup(engine *gin.Engine) {
 	})
 
 	// Serve uploaded files
-	engine.Static("/uploads", "./uploads")
+	// When running from backend/cmd/server/, project root is ../../
+	engine.Static("/uploads", "../../uploads")
 
 	// WebSocket route - bypass global rate limiting to avoid connection drops during navigation
 	engine.GET("/api/v1/ws", func(c *gin.Context) {

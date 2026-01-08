@@ -93,6 +93,8 @@ CREATE TABLE article_images (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+ALTER TABLE article_images ADD COLUMN description TEXT;
+
 CREATE TABLE article_versions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     article_id UUID REFERENCES articles(id) ON DELETE CASCADE,
@@ -131,8 +133,8 @@ CREATE TABLE article_tags (
 );
 
 CREATE TABLE article_relations (
-    article_id UUID REFERENCES articles(id),
-    related_article_id UUID REFERENCES articles(id),
+    article_id UUID REFERENCES articles(id) ON DELETE CASCADE,
+    related_article_id UUID REFERENCES articles(id) ON DELETE CASCADE,
     PRIMARY KEY (article_id, related_article_id)
 );
 
@@ -249,7 +251,7 @@ CREATE TABLE article_seo_redirects (
 
 CREATE TABLE article_views (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    article_id UUID REFERENCES articles(id),
+    article_id UUID REFERENCES articles(id) ON DELETE CASCADE,
 
     ip_address INET,
     user_agent TEXT,
@@ -272,7 +274,7 @@ CREATE TABLE article_comments (
 );
 
 CREATE TABLE article_stats (
-    article_id UUID PRIMARY KEY REFERENCES articles(id),
+    article_id UUID PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
     view_count BIGINT DEFAULT 0,
     share_count BIGINT DEFAULT 0
 );

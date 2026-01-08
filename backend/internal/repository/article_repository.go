@@ -200,7 +200,24 @@ func (r *articleRepository) Update(article *domain.Article) error {
 }
 
 func (r *articleRepository) Delete(id uuid.UUID) error {
-	return r.db.Delete(&domain.Article{}, "id = ?", id).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Cleanup relations that might not have ON DELETE CASCADE yet
+		if err := tx.Exec("DELETE FROM article_relations WHERE article_id = ? OR related_article_id = ?", id, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec("DELETE FROM article_views WHERE article_id = ?", id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec("DELETE FROM article_stats WHERE article_id = ?", id).Error; err != nil {
+			return err
+		}
+
+		// Delete the article
+		if err := tx.Delete(&domain.Article{}, "id = ?", id).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (r *articleRepository) AddTags(articleID uuid.UUID, tagIDs []uuid.UUID) error {

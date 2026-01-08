@@ -14,9 +14,10 @@ import (
 type UploadHandler struct{}
 
 func NewUploadHandler() *UploadHandler {
-	// Ensure uploads directory exists
-	if _, err := os.Stat("uploads"); os.IsNotExist(err) {
-		os.Mkdir("uploads", 0755)
+	// Ensure uploads directory exists relative to project root
+	uploadDir := filepath.Join("..", "..", "uploads")
+	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
+		os.MkdirAll(uploadDir, 0755)
 	}
 	return &UploadHandler{}
 }
@@ -43,16 +44,16 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 
 	// Generate unique filename
 	filename := fmt.Sprintf("%s%s", uuid.New().String(), ext)
-	filepath := filepath.Join("uploads", filename)
+	// Point to project_root/uploads
+	savePath := filepath.Join("..", "..", "uploads", filename)
 
-	if err := c.SaveUploadedFile(file, filepath); err != nil {
+	if err := c.SaveUploadedFile(file, savePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 		return
 	}
 
 	// Return URL
-	// In production, this should be a full URL domain. For now, relative path.
-	// We'll serve /uploads folder statically.
+	// The router serves /uploads from ../../uploads, so this relative URL remains same
 	url := fmt.Sprintf("/uploads/%s", filename)
 	c.JSON(http.StatusOK, gin.H{"url": url})
 }
