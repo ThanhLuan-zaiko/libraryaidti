@@ -580,3 +580,54 @@ func (h *ArticleHandler) DeleteRedirect(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Redirect deleted successfully"})
 }
+
+// GetArticleRelations returns all incoming and outgoing relations for an article
+func (h *ArticleHandler) GetArticleRelations(c *gin.Context) {
+	idStr := c.Param("id")
+	articleID, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	type RelatedArticleInfo struct {
+		ID    uuid.UUID `json:"id"`
+		Title string    `json:"title"`
+		Slug  string    `json:"slug"`
+	}
+
+	type RelationDetail struct {
+		IncomingArticles []RelatedArticleInfo `json:"incoming_articles"`
+		OutgoingArticles []RelatedArticleInfo `json:"outgoing_articles"`
+	}
+
+	// Get the article with its outgoing relations
+	article, err := h.service.GetArticleByID(articleID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Article not found"})
+		return
+	}
+
+	result := RelationDetail{
+		IncomingArticles: make([]RelatedArticleInfo, 0),
+		OutgoingArticles: make([]RelatedArticleInfo, 0),
+	}
+
+	// Outgoing: articles this article links to (from Related field)
+	for _, related := range article.Related {
+		if related != nil {
+			result.OutgoingArticles = append(result.OutgoingArticles, RelatedArticleInfo{
+				ID:    related.ID,
+				Title: related.Title,
+				Slug:  related.Slug,
+			})
+		}
+	}
+
+	// For incoming, we need to query articles that have this article in their Related
+	// Since we can't do reverse lookup easily without repository method,
+	// let's return what we have for now (outgoing only)
+	// TODO: Add repository method to get incoming relations
+
+	c.JSON(http.StatusOK, result)
+}

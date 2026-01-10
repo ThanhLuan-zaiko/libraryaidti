@@ -56,6 +56,28 @@ export interface DashboardData {
     category_distribution: CategoryDistribution[];
 }
 
+export interface ArticleRelationStats {
+    top_incoming_links: {
+        article_id: string;
+        article_title: string;
+        incoming_count: number;
+    }[];
+    top_outgoing_links: {
+        article_id: string;
+        article_title: string;
+        outgoing_count: number;
+    }[];
+    category_relations: {
+        category_name: string;
+        relation_count: number;
+    }[];
+    bidirectional_stats: {
+        total_links: number;
+        bidirectional_links: number;
+        bidirectional_ratio: number;
+    };
+}
+
 export interface AdvancedAnalyticsData {
     seo_stats: {
         missing_meta_description: number;
@@ -83,6 +105,7 @@ export interface AdvancedAnalyticsData {
         avg_tag_density: number;
         good_content_length: number;
     };
+    relation_stats: ArticleRelationStats;
 }
 
 export const getDashboardData = async () => {

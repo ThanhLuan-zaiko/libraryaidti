@@ -12,6 +12,7 @@ import WorkflowBottlenecks from './advanced/WorkflowBottlenecks';
 import KeywordInsights from './advanced/KeywordInsights';
 import TechnicalOverview from './advanced/TechnicalOverview';
 import ContentRelationStats from './advanced/ContentRelationStats';
+import ArticleRelationshipStats from './advanced/ArticleRelationshipStats';
 
 import { downloadCSV } from '@/utils/export';
 
@@ -126,6 +127,9 @@ const ArticleManagementAdvanced = () => {
                 mediaStats={advancedData.media_stats}
                 versioningStats={advancedData.versioning_stats}
             />
+
+            {/* Matrix 4: Article Relationship Network */}
+            <ArticleRelationshipStats stats={advancedData.relation_stats} />
 
             {/* AI Advisor / Insight Footer */}
             <div className="p-8 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-3xl text-white shadow-xl shadow-blue-100 relative overflow-hidden">

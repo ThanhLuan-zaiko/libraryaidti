@@ -18,6 +18,31 @@ type DashboardAnalyticsData struct {
 	TopTags         []TagStats      `json:"top_tags"`
 }
 
+type ArticleRelationStats struct {
+	TopIncomingLinks []struct {
+		ArticleID     string `json:"article_id"`
+		ArticleTitle  string `json:"article_title"`
+		IncomingCount int64  `json:"incoming_count"`
+	} `json:"top_incoming_links"`
+
+	TopOutgoingLinks []struct {
+		ArticleID     string `json:"article_id"`
+		ArticleTitle  string `json:"article_title"`
+		OutgoingCount int64  `json:"outgoing_count"`
+	} `json:"top_outgoing_links"`
+
+	CategoryRelations []struct {
+		CategoryName  string `json:"category_name"`
+		RelationCount int64  `json:"relation_count"`
+	} `json:"category_relations"`
+
+	BidirectionalStats struct {
+		TotalLinks         int64   `json:"total_links"`
+		BidirectionalLinks int64   `json:"bidirectional_links"`
+		BidirectionalRatio float64 `json:"bidirectional_ratio"`
+	} `json:"bidirectional_stats"`
+}
+
 type AdvancedAnalyticsData struct {
 	SEOStats struct {
 		MissingMetaDescription int64 `json:"missing_meta_description"`
@@ -46,6 +71,7 @@ type AdvancedAnalyticsData struct {
 		GoodContentLength int64   `json:"good_content_length"`
 		MissingCanonical  int64   `json:"missing_canonical"`
 	} `json:"content_health"`
+	RelationStats ArticleRelationStats `json:"relation_stats"`
 }
 
 type ArticleTrend struct {

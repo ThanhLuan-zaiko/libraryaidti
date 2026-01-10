@@ -139,5 +139,23 @@ export const articleService = {
             },
         });
         return response.data;
+    },
+
+    async getRelations(id: string): Promise<ArticleRelationDetail> {
+        const response = await apiClient.get<ArticleRelationDetail>(`${ARTICLES_URL}/${id}/relations`);
+        return response.data;
     }
 };
+
+export interface ArticleRelationDetail {
+    incoming_articles: {
+        id: string;
+        title: string;
+        slug: string;
+    }[];
+    outgoing_articles: {
+        id: string;
+        title: string;
+        slug: string;
+    }[];
+}

@@ -151,8 +151,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 			protected.GET("/admin/super-dashboard", middleware.CacheMiddleware(r.cache, time.Minute), r.dashboardHandler.GetSuperDashboard)
 			protected.GET("/admin/export-dashboard", r.dashboardHandler.ExportDashboard)
 			protected.GET("/admin/dashboard", middleware.CacheMiddleware(r.cache, time.Minute), r.statsHandler.GetDashboardData)
-			protected.GET("/admin/analytics", middleware.CacheMiddleware(r.cache, time.Minute*2), r.dashboardHandler.GetAnalytics)
-			protected.GET("/admin/advanced-analytics", middleware.CacheMiddleware(r.cache, time.Minute*2), r.dashboardHandler.GetAdvancedAnalytics)
+			protected.GET("/admin/analytics", middleware.CacheMiddleware(r.cache, time.Second*30), r.dashboardHandler.GetAnalytics)
+			// Real-time analytics - no cache for advanced-analytics
+			protected.GET("/admin/advanced-analytics", r.dashboardHandler.GetAdvancedAnalytics)
 			protected.GET("/admin/analytics/hierarchy/stats", middleware.CacheMiddleware(r.cache, time.Minute*5), r.dashboardHandler.GetHierarchyStats)
 			protected.GET("/admin/analytics/hierarchy/tree", middleware.CacheMiddleware(r.cache, time.Minute*10), r.dashboardHandler.GetCategoryTree)
 
@@ -176,6 +177,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 				articles.PUT("/:id/status", r.articleHandler.ChangeStatus)
 				articles.POST("/:id/redirects", r.articleHandler.AddRedirect)
 				articles.DELETE("/:id/redirects/:redirectId", r.articleHandler.DeleteRedirect)
+				articles.GET("/:id/relations", r.articleHandler.GetArticleRelations) // New endpoint
 			}
 
 			protected.GET("/roles", r.userHandler.GetRoles)

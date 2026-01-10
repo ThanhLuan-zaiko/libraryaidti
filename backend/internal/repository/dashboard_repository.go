@@ -178,6 +178,89 @@ func (r *dashboardRepository) GetAdvancedAnalytics() (*domain.AdvancedAnalyticsD
 		Where("canonical_url IS NULL OR canonical_url = ''").
 		Count(&data.ContentHealth.MissingCanonical)
 
+	// 7. Article Relationship Statistics
+	// Initialize slices
+	data.RelationStats.TopIncomingLinks = make([]struct {
+		ArticleID     string `json:"article_id"`
+		ArticleTitle  string `json:"article_title"`
+		IncomingCount int64  `json:"incoming_count"`
+	}, 0)
+	data.RelationStats.TopOutgoingLinks = make([]struct {
+		ArticleID     string `json:"article_id"`
+		ArticleTitle  string `json:"article_title"`
+		OutgoingCount int64  `json:"outgoing_count"`
+	}, 0)
+	data.RelationStats.CategoryRelations = make([]struct {
+		CategoryName  string `json:"category_name"`
+		RelationCount int64  `json:"relation_count"`
+	}, 0)
+
+	// Top articles by incoming links
+	r.db.Raw(`
+		SELECT 
+			a.id as article_id,
+			a.title as article_title,
+			COUNT(ar.article_id) as incoming_count
+		FROM articles a
+		LEFT JOIN article_relations ar ON a.id = ar.related_article_id
+		GROUP BY a.id, a.title
+		HAVING COUNT(ar.article_id) > 0
+		ORDER BY incoming_count DESC
+		LIMIT 10
+	`).Scan(&data.RelationStats.TopIncomingLinks)
+
+	// Top articles by outgoing links
+	r.db.Raw(`
+		SELECT 
+			a.id as article_id,
+			a.title as article_title,
+			COUNT(ar.related_article_id) as outgoing_count
+		FROM articles a
+		LEFT JOIN article_relations ar ON a.id = ar.article_id
+		GROUP BY a.id, a.title
+		HAVING COUNT(ar.related_article_id) > 0
+		ORDER BY outgoing_count DESC
+		LIMIT 10
+	`).Scan(&data.RelationStats.TopOutgoingLinks)
+
+	// Relations by category
+	r.db.Raw(`
+		SELECT 
+			c.name as category_name,
+			COUNT(ar.article_id) as relation_count
+		FROM categories c
+		LEFT JOIN articles a ON c.id = a.category_id
+		LEFT JOIN article_relations ar ON a.id = ar.article_id
+		GROUP BY c.id, c.name
+		ORDER BY relation_count DESC
+	`).Scan(&data.RelationStats.CategoryRelations)
+
+	// Bidirectional link ratio
+	r.db.Raw(`
+		WITH bidirectional AS (
+			SELECT COUNT(*) as bi_count
+			FROM article_relations ar1
+			WHERE EXISTS (
+				SELECT 1 FROM article_relations ar2
+				WHERE ar1.article_id = ar2.related_article_id
+				AND ar1.related_article_id = ar2.article_id
+			)
+		),
+		total AS (
+			SELECT COUNT(*) as total_count FROM article_relations
+		)
+		SELECT 
+			total.total_count as total_links,
+			COALESCE(bidirectional.bi_count, 0) as bidirectional_links,
+			CASE 
+				WHEN total.total_count > 0 
+				THEN COALESCE(bidirectional.bi_count, 0)::float / total.total_count * 100
+				ELSE 0 
+			END as bidirectional_ratio
+		FROM total
+		LEFT JOIN bidirectional ON true
+	`).Scan(&data.RelationStats.BidirectionalStats)
+
 	return &data, nil
 }
 
