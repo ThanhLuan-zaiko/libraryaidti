@@ -68,6 +68,10 @@ func (r *articleRepository) GetAll(offset, limit int, filter map[string]interfac
 		query = query.Where("articles.category_id = ?", categoryID)
 	}
 
+	if isFeatured, ok := filter["is_featured"]; ok {
+		query = query.Where("articles.is_featured = ?", isFeatured)
+	}
+
 	if search, ok := filter["search"]; ok && search != "" {
 		searchTerm := "%" + search.(string) + "%"
 		if minimal {
@@ -87,6 +91,10 @@ func (r *articleRepository) GetAll(offset, limit int, filter map[string]interfac
 
 	if err := query.Offset(offset).Limit(limit).Order("articles.created_at DESC").Find(&articles).Error; err != nil {
 		return nil, 0, err
+	}
+
+	for i := range articles {
+		articles[i].PopulateImageURL()
 	}
 
 	return articles, total, nil
@@ -259,4 +267,73 @@ func (r *articleRepository) GetOutgoingRelations(id uuid.UUID) ([]domain.Related
 		LIMIT 50
 	`, id).Scan(&result).Error
 	return result, err
+}
+
+func (r *articleRepository) GetTrending(limit int) ([]domain.Article, error) {
+	var articles []domain.Article
+	// For simplicity, we use the view_count column.
+	// In a real scenario, we would join with article_views and filter by date.
+	// However, if we want "last 7 days" and we have an article_views table:
+	if err := r.db.Model(&domain.Article{}).
+		Preload("Category").
+		Preload("Author").
+		Preload("Images").
+		Where("status = ?", domain.StatusPublished).
+		Order("view_count DESC").
+		Limit(limit).
+		Find(&articles).Error; err != nil {
+		return nil, err
+	}
+
+	for i := range articles {
+		articles[i].PopulateImageURL()
+	}
+
+	return articles, nil
+}
+func (r *articleRepository) GetDiscussed(limit int) ([]domain.Article, error) {
+	var articles []domain.Article
+
+	// Use denormalized comment_count for performance
+	err := r.db.Model(&domain.Article{}).
+		Preload("Category").
+		Preload("Author").
+		Preload("Images").
+		Where("status = ?", domain.StatusPublished).
+		Order("comment_count DESC, created_at DESC").
+		Limit(limit).
+		Find(&articles).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range articles {
+		articles[i].PopulateImageURL()
+	}
+
+	return articles, nil
+}
+
+func (r *articleRepository) GetRandom(limit int) ([]domain.Article, error) {
+	var articles []domain.Article
+
+	err := r.db.Model(&domain.Article{}).
+		Preload("Category").
+		Preload("Author").
+		Preload("Images").
+		Where("status = ?", domain.StatusPublished).
+		Order("RANDOM()").
+		Limit(limit).
+		Find(&articles).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range articles {
+		articles[i].PopulateImageURL()
+	}
+
+	return articles, nil
 }

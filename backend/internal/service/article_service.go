@@ -365,3 +365,21 @@ func (s *articleService) GetArticleRelations(id uuid.UUID) ([]domain.RelatedArti
 
 	return incoming, outgoing, nil
 }
+
+func (s *articleService) GetTrendingArticles(limit int) ([]domain.Article, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	return s.repo.GetTrending(limit)
+}
+
+func (s *articleService) GetDiscussedArticles(limit int) ([]domain.Article, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	return s.repo.GetDiscussed(limit)
+}
+
+func (s *articleService) GetRandomArticles(limit int) ([]domain.Article, error) {
+	return s.repo.GetRandom(limit)
+}

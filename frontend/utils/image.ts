@@ -16,8 +16,8 @@ export const getImageUrl = (path?: string): string => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
     const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
 
-    // Ensure path starts with a slash
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    // Ensure path starts with a slash and remove leading slashes if base ends with one
+    const cleanPath = path.replace(/^\/+/, '');
 
-    return `${baseUrl}${normalizedPath}`;
+    return `${baseUrl}/${cleanPath}`;
 };

@@ -12,6 +12,12 @@ type AdminStats struct {
 	ReaderTrend     float64 `json:"reader_trend"`
 }
 
+type PublicStats struct {
+	TotalArticles   int64 `json:"total_articles"`
+	TotalReaders    int64 `json:"total_readers"`
+	TotalCategories int64 `json:"total_categories"`
+}
+
 type AdminActivity struct {
 	ID        string    `json:"id"`
 	Type      string    `json:"type"` // "article_published", "user_registered", "article_updated"
@@ -47,4 +53,5 @@ type StatsRepository interface {
 
 type StatsService interface {
 	GetDashboardData() (*DashboardData, error)
+	GetPublicStats() (*PublicStats, error)
 }

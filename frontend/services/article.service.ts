@@ -19,6 +19,7 @@ export interface Article {
     published_at?: string;
     is_featured: boolean;
     view_count: number;
+    comment_count?: number;
     images?: {
         id: string;
         image_url: string;
@@ -89,11 +90,29 @@ export const articleService = {
         search?: string;
         status?: string;
         category_id?: string;
+        is_featured?: boolean;
         minimal?: boolean;
     }) {
         const response = await apiClient.get<PaginatedResult<Article>>(ARTICLES_URL, {
             params
         });
+        return response.data;
+    },
+
+    async getTrending(limit: number = 10): Promise<{ data: Article[] }> {
+        const response = await apiClient.get<{ data: Article[] }>(`${ARTICLES_URL}/trending`, {
+            params: { limit }
+        });
+        return response.data;
+    },
+
+    async getDiscussed(limit: number = 10): Promise<{ data: Article[] }> {
+        const response = await apiClient.get<{ data: Article[] }>(`${ARTICLES_URL}/discussed?limit=${limit}`);
+        return response.data;
+    },
+
+    async getRandom(limit: number = 10): Promise<{ data: Article[] }> {
+        const response = await apiClient.get<{ data: Article[] }>(`${ARTICLES_URL}/random?limit=${limit}`);
         return response.data;
     },
 

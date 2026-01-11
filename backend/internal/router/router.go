@@ -105,11 +105,21 @@ func (r *Router) Setup(engine *gin.Engine) {
 		// Upload route
 		v1.POST("/upload", r.uploadHandler.UploadImage)
 
-		// Article routes (Public read)
+		// Public routes
 		articles := v1.Group("/articles")
 		{
-			articles.GET("", middleware.CacheMiddleware(r.cache, time.Second*5), r.articleHandler.GetArticles)
+			articles.GET("", r.articleHandler.GetArticles)
+			articles.GET("/trending", r.articleHandler.GetTrending)
+			articles.GET("/discussed", r.articleHandler.GetDiscussed)
+			articles.GET("/random", middleware.CacheMiddleware(r.cache, time.Second*10), r.articleHandler.GetRandom)
 			articles.GET("/:id", r.articleHandler.GetArticle)
+			articles.GET("/:id/relations", r.articleHandler.GetArticleRelations)
+		}
+
+		// Stats routes
+		stats := v1.Group("/stats")
+		{
+			stats.GET("/public", middleware.CacheMiddleware(r.cache, time.Hour), r.statsHandler.GetPublicStats)
 		}
 
 		// Category routes
@@ -178,7 +188,6 @@ func (r *Router) Setup(engine *gin.Engine) {
 				articles.PUT("/:id/status", r.articleHandler.ChangeStatus)
 				articles.POST("/:id/redirects", r.articleHandler.AddRedirect)
 				articles.DELETE("/:id/redirects/:redirectId", r.articleHandler.DeleteRedirect)
-				articles.GET("/:id/relations", r.articleHandler.GetArticleRelations) // New endpoint
 			}
 
 			protected.GET("/roles", r.userHandler.GetRoles)

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,15 +41,43 @@ type Article struct {
 	UpdatedAt    time.Time     `gorm:"default:now()" json:"updated_at"`
 
 	// Relations
-	Images      []ArticleImage       `gorm:"foreignKey:ArticleID" json:"images"`
-	MediaList   []ArticleMedia       `gorm:"foreignKey:ArticleID" json:"media_list"`
-	Versions    []ArticleVersion     `gorm:"foreignKey:ArticleID" json:"versions"`
-	StatusLogs  []ArticleStatusLog   `gorm:"foreignKey:ArticleID" json:"status_logs"`
-	Tags        []Tag                `gorm:"many2many:article_tags;joinForeignKey:article_id;joinReferences:tag_id" json:"tags"`
-	Related     []*Article           `gorm:"many2many:article_relations;foreignKey:id;joinForeignKey:article_id;references:id;joinReferences:related_article_id" json:"related_articles"`
-	SEOMetadata *SeoMetadata         `gorm:"foreignKey:ArticleID" json:"seo_metadata"`
-	Redirects   []ArticleSeoRedirect `gorm:"foreignKey:ArticleID" json:"redirects"`
-	ViewCount   int                  `gorm:"default:0" json:"view_count"` // Keep this for stats
+	Images       []ArticleImage       `gorm:"foreignKey:ArticleID" json:"images"`
+	MediaList    []ArticleMedia       `gorm:"foreignKey:ArticleID" json:"media_list"`
+	Versions     []ArticleVersion     `gorm:"foreignKey:ArticleID" json:"versions"`
+	StatusLogs   []ArticleStatusLog   `gorm:"foreignKey:ArticleID" json:"status_logs"`
+	Tags         []Tag                `gorm:"many2many:article_tags;joinForeignKey:article_id;joinReferences:tag_id" json:"tags"`
+	Related      []*Article           `gorm:"many2many:article_relations;foreignKey:id;joinForeignKey:article_id;references:id;joinReferences:related_article_id" json:"related_articles"`
+	SEOMetadata  *SeoMetadata         `gorm:"foreignKey:ArticleID" json:"seo_metadata"`
+	Redirects    []ArticleSeoRedirect `gorm:"foreignKey:ArticleID" json:"redirects"`
+	ViewCount    int                  `gorm:"default:0" json:"view_count"`    // Keep this for stats
+	CommentCount int                  `gorm:"default:0" json:"comment_count"` // Actual persisted count for performance
+	ImageURL     string               `gorm:"-" json:"image_url"`             // Alias for primary image URL
+}
+
+func (a *Article) PopulateImageURL() {
+	if a.ImageURL != "" {
+		return
+	}
+
+	cleanUrl := func(url string) string {
+		// Strip leading slashes to prevent double slashes when prepending /
+		url = strings.TrimPrefix(url, "/")
+		// Fix legacy paths that might contain ../../
+		url = strings.ReplaceAll(url, "../../", "")
+		return "/" + url
+	}
+
+	// Try primary image first
+	for _, img := range a.Images {
+		if img.IsPrimary {
+			a.ImageURL = cleanUrl(img.ImageURL)
+			return
+		}
+	}
+	// Fallback to first image
+	if len(a.Images) > 0 {
+		a.ImageURL = cleanUrl(a.Images[0].ImageURL)
+	}
 }
 
 // ArticleImage maps to article_images table
@@ -108,6 +137,9 @@ type ArticleRepository interface {
 	UpdateStatus(id uuid.UUID, status ArticleStatus) error
 	GetIncomingRelations(id uuid.UUID) ([]RelatedArticleInfo, error)
 	GetOutgoingRelations(id uuid.UUID) ([]RelatedArticleInfo, error)
+	GetTrending(limit int) ([]Article, error)
+	GetDiscussed(limit int) ([]Article, error)
+	GetRandom(limit int) ([]Article, error)
 }
 
 type ArticleService interface {
@@ -124,4 +156,7 @@ type ArticleService interface {
 	DeleteArticleRedirect(redirectID uuid.UUID) error
 	GetRedirectDestination(slug string) (string, error)
 	GetArticleRelations(id uuid.UUID) ([]RelatedArticleInfo, []RelatedArticleInfo, error)
+	GetTrendingArticles(limit int) ([]Article, error)
+	GetDiscussedArticles(limit int) ([]Article, error)
+	GetRandomArticles(limit int) ([]Article, error)
 }

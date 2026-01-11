@@ -108,7 +108,7 @@ func (p *ImageProcessor) processImageBytes(data []byte, articleID string) (*Imag
 
 	return &ImageInfo{
 		FileName: filename,
-		URL:      "/" + filepath.ToSlash(relativePath),
+		URL:      fmt.Sprintf("/uploads/articles/%s/%s", articleID, filename),
 		Path:     fullPath,
 		Size:     fileInfo.Size(),
 		Type:     "image/webp",

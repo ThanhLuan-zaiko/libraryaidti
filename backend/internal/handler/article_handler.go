@@ -601,3 +601,48 @@ func (h *ArticleHandler) GetArticleRelations(c *gin.Context) {
 		"outgoing_articles": outgoing,
 	})
 }
+
+// GetTrending returns trending articles
+func (h *ArticleHandler) GetTrending(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	articles, err := h.service.GetTrendingArticles(limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch trending articles"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": articles,
+	})
+}
+
+// GetDiscussed returns articles ordered by comment count
+func (h *ArticleHandler) GetDiscussed(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	articles, err := h.service.GetDiscussedArticles(limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch discussed articles"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": articles,
+	})
+}
+
+// GetRandom returns random articles for discovery
+func (h *ArticleHandler) GetRandom(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	articles, err := h.service.GetRandomArticles(limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch random articles"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": articles,
+	})
+}
