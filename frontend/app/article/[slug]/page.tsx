@@ -15,6 +15,7 @@ import ArticleSidebar from '@/components/article/ArticleSidebar';
 import ArticleAuthor from '@/components/article/ArticleAuthor';
 import RelatedArticles from '@/components/article/RelatedArticles';
 import ArticleGallery from '@/components/article/ArticleGallery';
+import CommentSection from '@/components/comments/CommentSection'; // Added import
 
 export default function ArticleDetail() {
     const { slug } = useParams();
@@ -112,7 +113,7 @@ export default function ArticleDetail() {
 
 
     return (
-        <div className="bg-[#FFFFFF] min-h-screen selection:bg-blue-600 selection:text-white font-sans text-gray-900">
+        <div className="bg-[#FFFFFF] min-h-screen selection:bg-blue-600 selection:text-white font-sans text-gray-900 overflow-x-clip">
             {/* Ultra-Precision Progress Bar */}
             <div className="fixed top-0 left-0 w-full h-[4px] z-[100] bg-gray-50">
                 <div
@@ -141,7 +142,7 @@ export default function ArticleDetail() {
 
             {/* Strategic Layout Structure */}
             <main className="container mx-auto max-w-7xl px-6 py-20 lg:py-32 relative">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-24 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 xl:gap-24">
 
                     <div className="lg:col-span-8 flex flex-col space-y-16">
                         <ArticleContent
@@ -153,6 +154,7 @@ export default function ArticleDetail() {
                             }}
                         />
                         <ArticleAuthor article={article} />
+                        <CommentSection articleId={article.id} />
                     </div>
 
                     {/* Sidebar Column */}

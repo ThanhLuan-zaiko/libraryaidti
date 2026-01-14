@@ -14,7 +14,7 @@ const ArticleContent: React.FC<ArticleContentProps> = ({ article, content, onCop
     return (
         <article className="lg:col-span-8 flex flex-col space-y-16">
             {/* Grand Abstract Card */}
-            <div className="relative group p-12 md:p-20 bg-gray-50 rounded-[4rem] border border-gray-100 shadow-[0_60px_100px_-20px_rgba(0,0,0,0.03)] overflow-hidden transition-all hover:bg-white hover:shadow-2xl">
+            <div className="relative group p-6 md:p-12 lg:p-20 bg-gray-50 rounded-[2rem] md:rounded-[4rem] border border-gray-100 shadow-[0_60px_100px_-20px_rgba(0,0,0,0.03)] overflow-hidden transition-all hover:bg-white hover:shadow-2xl">
                 <div className="absolute top-0 right-0 w-1/3 h-1/3 bg-blue-600/5 rounded-full blur-[100px] -mr-20 -mt-20 group-hover:scale-150 transition-transform" />
                 <FaQuoteLeft className="text-blue-100/40 text-[12rem] absolute -top-8 -left-8 -rotate-12 transition-transform group-hover:rotate-0" />
                 <p className="relative z-10 text-2xl md:text-4xl font-black text-gray-900 leading-[1.4] tracking-tight italic">
@@ -24,7 +24,7 @@ const ArticleContent: React.FC<ArticleContentProps> = ({ article, content, onCop
 
             {/* High-Performance Article Body */}
             <div
-                className="article-body
+                className="article-body max-w-full break-words overflow-hidden
                     text-xl md:text-2xl leading-[1.8] text-gray-800 font-normal tracking-tight
                     [&>p]:mb-12 [&>p]:font-medium [&>p]:text-gray-700
                     [&>h2]:text-4xl [&>h2]:md:text-6xl [&>h2]:font-black [&>h2]:text-gray-950 [&>h2]:mt-24 [&>h2]:mb-10 [&>h2]:tracking-tighter [&>h2]:leading-[1.1]

@@ -105,7 +105,12 @@ func main() {
 
 	seoHandler := handler.NewSeoHandler(seoService)
 
-	appRouter := router.NewRouter(articleHandler, categoryHandler, tagHandler, authHandler, statsHandler, dashboardHandler, userHandler, uploadHandler, seoHandler, wsHub, respCache)
+	// Comments
+	commentRepo := repository.NewCommentRepository(db.DB)
+	commentService := service.NewCommentService(commentRepo)
+	commentHandler := handler.NewCommentHandler(commentService, wsHub)
+
+	appRouter := router.NewRouter(articleHandler, categoryHandler, tagHandler, authHandler, statsHandler, dashboardHandler, userHandler, uploadHandler, seoHandler, commentHandler, wsHub, respCache)
 	appRouter.Setup(r)
 
 	// 6. Start Server

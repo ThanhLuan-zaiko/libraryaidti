@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { authService } from "@/services/auth.service";
 import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
+import { Toaster } from "react-hot-toast";
 import {
     HiOutlineViewGrid,
     HiOutlineDocumentText,
@@ -70,6 +71,24 @@ export default function AdminLayout({
 
     return (
         <div className="fixed inset-0 z-[60] flex bg-gray-50/50 overflow-hidden font-sans">
+            <Toaster
+                position="bottom-center"
+                toastOptions={{
+                    className: '!bg-white/80 !backdrop-blur-md !border !border-gray-100 !px-6 !py-3 !rounded-full !shadow-xl !text-sm !font-semibold !text-neutral-900',
+                    success: {
+                        iconTheme: {
+                            primary: '#10b981',
+                            secondary: '#ecfdf5',
+                        },
+                    },
+                    error: {
+                        iconTheme: {
+                            primary: '#ef4444',
+                            secondary: '#fef2f2',
+                        },
+                    },
+                }}
+            />
             {/* Mobile Backdrop */}
             {isSidebarOpen && (
                 <div

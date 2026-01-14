@@ -18,10 +18,11 @@ type Router struct {
 	authHandler      *handler.AuthHandler
 	statsHandler     *handler.StatsHandler
 	dashboardHandler *handler.DashboardHandler
-	parentHandler    *handler.UserHandler // Alias or keeping userHandler is fine, just adding uploadHandler
+	parentHandler    *handler.UserHandler
 	userHandler      *handler.UserHandler
 	uploadHandler    *handler.UploadHandler
 	seoHandler       *handler.SeoHandler
+	commentHandler   *handler.CommentHandler // Added
 	userRepo         domain.UserRepository
 	wsHub            *ws.Hub
 	cache            *middleware.ResponseCache
@@ -37,6 +38,7 @@ func NewRouter(
 	userHandler *handler.UserHandler,
 	uploadHandler *handler.UploadHandler,
 	seoHandler *handler.SeoHandler,
+	commentHandler *handler.CommentHandler, // Added
 	wsHub *ws.Hub,
 	cache *middleware.ResponseCache,
 ) *Router {
@@ -50,6 +52,7 @@ func NewRouter(
 		userHandler:      userHandler,
 		uploadHandler:    uploadHandler,
 		seoHandler:       seoHandler,
+		commentHandler:   commentHandler, // Added
 		userRepo:         userHandler.GetService().GetRepo(),
 		wsHub:            wsHub,
 		cache:            cache,
@@ -114,6 +117,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 			articles.GET("/random", middleware.CacheMiddleware(r.cache, time.Second*10), r.articleHandler.GetRandom)
 			articles.GET("/:id", r.articleHandler.GetArticle)
 			articles.GET("/:id/relations", r.articleHandler.GetArticleRelations)
+
+			// Public Comment Routes (Read-only)
+			articles.GET("/:id/comments", r.commentHandler.GetComments)
 		}
 
 		// Stats routes
@@ -157,6 +163,12 @@ func (r *Router) Setup(engine *gin.Engine) {
 				email, _ := c.Get("email")
 				c.JSON(200, gin.H{"message": "Welcome!", "email": email})
 			})
+
+			// Comment Management (Protected)
+			// Rate limit: 0.33 rps (approx 20/min), burst 5
+			protected.POST("/comments", middleware.RateLimitMiddleware(rate.Limit(0.33), 5), r.commentHandler.CreateComment)
+			protected.DELETE("/comments/:id", r.commentHandler.DeleteComment)
+			protected.PUT("/comments/:id/restore", r.commentHandler.RestoreComment)
 
 			// Admin Stats
 			protected.GET("/admin/super-dashboard", middleware.CacheMiddleware(r.cache, time.Minute), r.dashboardHandler.GetSuperDashboard)

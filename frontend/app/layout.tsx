@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 };
 
 import { AuthProvider } from "@/hooks/useAuth";
+import { Toaster } from "react-hot-toast";
 
 export default function RootLayout({
   children,
@@ -35,6 +36,24 @@ export default function RootLayout({
           <main className="pt-16 lg:pt-20">
             {children}
           </main>
+          <Toaster
+            position="bottom-center"
+            toastOptions={{
+              className: '!bg-white/80 !backdrop-blur-md !border !border-gray-100 !px-6 !py-3 !rounded-full !shadow-xl !text-sm !font-semibold !text-neutral-900',
+              success: {
+                iconTheme: {
+                  primary: '#10b981',
+                  secondary: '#ecfdf5',
+                },
+              },
+              error: {
+                iconTheme: {
+                  primary: '#ef4444',
+                  secondary: '#fef2f2',
+                },
+              },
+            }}
+          />
         </AuthProvider>
       </body>
     </html>

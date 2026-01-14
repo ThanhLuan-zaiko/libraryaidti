@@ -80,7 +80,7 @@ const Navbar = () => {
 
     const dynamicLinks = categories.map(categoryToNavItem);
 
-    const MAX_LINKS = 7;
+    const MAX_LINKS = 4;
     const initialLinks: NavLink[] = [
         { name: 'Trang chủ', href: '/' },
     ];
@@ -104,13 +104,13 @@ const Navbar = () => {
             if (isMobile) {
                 return (
                     <div className="flex flex-col space-y-3 w-full">
-                        <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-xl">
-                            <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold shadow-sm">
+                        <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-xl overflow-hidden">
+                            <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold shadow-sm shrink-0">
                                 {user.full_name?.charAt(0) || 'U'}
                             </div>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-gray-900">{user.full_name}</span>
-                                <span className="text-xs text-gray-500">{user.email}</span>
+                            <div className="flex flex-col min-w-0 flex-1">
+                                <span className="font-bold text-gray-900 truncate">{user.full_name}</span>
+                                <span className="text-xs text-gray-500 truncate">{user.email}</span>
                             </div>
                         </div>
                         <button

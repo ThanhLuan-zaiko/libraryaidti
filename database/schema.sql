@@ -152,20 +152,7 @@ CREATE TABLE comments (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE comment_replies (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    comment_id UUID REFERENCES comments(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
 
-    content TEXT NOT NULL,
-    parent_id UUID REFERENCES comment_replies(id),
-
-    is_spam BOOLEAN DEFAULT false,
-    is_deleted BOOLEAN DEFAULT false,
-
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
 
 CREATE TABLE media_files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -243,21 +230,6 @@ CREATE TABLE article_views (
     ip_address INET,
     user_agent TEXT,
     viewed_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE article_comments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    article_id UUID REFERENCES articles(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-
-    content TEXT NOT NULL,
-    parent_id UUID REFERENCES article_comments(id),
-
-    is_spam BOOLEAN DEFAULT false,
-    is_deleted BOOLEAN DEFAULT false,
-
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE article_stats (
@@ -481,3 +453,5 @@ SELECT * FROM article_media_versions;
 SELECT * FROM article_seo_metadata;
 SELECT * FROM seo_redirects;
 SELECT * FROM article_seo_redirects;
+
+SELECT * FROM comments;

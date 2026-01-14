@@ -41,7 +41,7 @@ func (s *articleService) CreateArticle(article *domain.Article) error {
 	// Check slug uniqueness
 	existing, _ := s.repo.GetBySlug(article.Slug)
 	if existing != nil {
-		return errors.New("slug already exists")
+		return errors.New("đường dẫn này đã tồn tại")
 	}
 
 	// 2. Set Default Values

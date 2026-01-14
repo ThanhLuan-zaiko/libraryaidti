@@ -57,7 +57,7 @@ const ArticleGallery: React.FC<ArticleGalleryProps> = ({ images }) => {
                 {images.map((image, index) => (
                     <div
                         key={image.id || index}
-                        className="flex-shrink-0 w-[350px] md:w-[600px] snap-start group"
+                        className="flex-shrink-0 w-[85vw] sm:w-[350px] md:w-[600px] snap-start group"
                     >
                         <div className="relative aspect-[16/10] overflow-hidden rounded-[2rem] bg-gray-100 border border-gray-100 shadow-md transition-all duration-500 hover:shadow-xl">
                             <img

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { IoClose, IoEyeOutline, IoEyeOffOutline } from 'react-icons/io5';
+import toast from 'react-hot-toast';
 import { authService } from '@/services/auth.service';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -56,10 +57,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTab = 'lo
                     email: formData.email,
                     password: formData.password
                 });
+                toast.success('Đăng nhập thành công');
                 onClose();
             } else {
                 if (formData.password !== formData.confirm_password) {
-                    setError('Mật khẩu xác nhận không khớp');
+                    toast.error('Mật khẩu xác nhận không khớp');
                     setLoading(false);
                     return;
                 }
@@ -69,10 +71,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTab = 'lo
                     full_name: formData.full_name
                 });
                 setActiveTab('login');
-                setError('Đăng ký thành công! Hãy đăng nhập.');
+                toast.success('Đăng ký thành công! Hãy đăng nhập.');
             }
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Đã có lỗi xảy ra');
+            const message = err.response?.data?.error || 'Đã có lỗi xảy ra';
+            toast.error(message);
+            setError(message); // Keep inline for accessibilty/persistence if desired, or remove? I'll keep it for now but toast is main.
         } finally {
             setLoading(false);
         }
