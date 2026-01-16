@@ -1,13 +1,14 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"backend/internal/config"
 	"backend/internal/db"
 	"backend/internal/domain"
 	"backend/internal/handler"
+	"backend/internal/logger"
 	"backend/internal/middleware"
 	"backend/internal/repository"
 	"backend/internal/router"
@@ -22,7 +23,16 @@ func main() {
 	// 1. Load configuration
 	cfg := config.LoadConfig()
 
-	// 2. Initialize Database
+	// 2. Initialize Logger
+	logger.Init(logger.Options{
+		Level:        slog.LevelInfo,
+		IsProduction: cfg.AppEnv == "prod",
+	})
+	log := logger.Get() // Shadowing the standard log package for this scope if needed, or just use logger.Get()
+
+	log.Info("Starting application", "env", cfg.AppEnv, "port", cfg.ServerPort)
+
+	// 3. Initialize Database
 	db.InitDB(cfg)
 
 	// Initialize Session
@@ -54,9 +64,11 @@ func main() {
 		&domain.SeoRedirect{},
 		&domain.ArticleSeoRedirect{},
 		&domain.ArticleRating{},
+		&domain.ArticleView{}, // View tracking
 	)
 	if err != nil {
-		log.Fatalf("AutoMigration failed: %v", err)
+		logger.Get().Error("AutoMigration failed", "error", err)
+		return // Exit main
 	}
 
 	// 4. Setup dependency injection
@@ -108,7 +120,7 @@ func main() {
 
 	// Comments
 	commentRepo := repository.NewCommentRepository(db.DB)
-	commentService := service.NewCommentService(commentRepo)
+	commentService := service.NewCommentService(commentRepo, articleRepo)
 	commentHandler := handler.NewCommentHandler(commentService, wsHub)
 
 	// Ratings
@@ -116,13 +128,18 @@ func main() {
 	ratingService := service.NewRatingService(ratingRepo, articleRepo)
 	ratingHandler := handler.NewRatingHandler(ratingService)
 
-	appRouter := router.NewRouter(articleHandler, categoryHandler, tagHandler, authHandler, statsHandler, dashboardHandler, userHandler, uploadHandler, seoHandler, commentHandler, ratingHandler, wsHub, respCache)
+	// View Tracking
+	viewTrackingRepo := repository.NewViewTrackingRepository(db.DB)
+	viewTrackingService := service.NewViewTrackingService(viewTrackingRepo, articleRepo)
+	viewTrackingHandler := handler.NewViewTrackingHandler(viewTrackingService)
+
+	appRouter := router.NewRouter(articleHandler, categoryHandler, tagHandler, authHandler, statsHandler, dashboardHandler, userHandler, uploadHandler, seoHandler, commentHandler, ratingHandler, viewTrackingHandler, wsHub, respCache)
 	appRouter.Setup(r)
 
 	// 6. Start Server
-	log.Printf("Server starting on port %s", cfg.ServerPort)
+	logger.Get().Info("Server starting", "port", cfg.ServerPort)
 	handler := session.SessionManager.LoadAndSave(r)
 	if err := http.ListenAndServe(":"+cfg.ServerPort, handler); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		logger.Get().Error("Failed to start server", "error", err)
 	}
 }

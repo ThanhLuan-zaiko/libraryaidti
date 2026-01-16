@@ -120,7 +120,7 @@ func (s *articleService) GetArticleByID(id uuid.UUID) (*domain.Article, error) {
 	if err != nil {
 		return nil, err
 	}
-	if article != nil && (article.Complexity == 0 || article.Depth == 0 || article.Impact == 0) {
+	if article != nil {
 		s.calculateArticleMetrics(article)
 	}
 	return article, nil
@@ -131,7 +131,7 @@ func (s *articleService) GetArticleBySlug(slug string) (*domain.Article, error) 
 	if err != nil {
 		return nil, err
 	}
-	if article != nil && (article.Complexity == 0 || article.Depth == 0 || article.Impact == 0) {
+	if article != nil {
 		s.calculateArticleMetrics(article)
 	}
 	return article, nil
@@ -286,12 +286,21 @@ func (s *articleService) DeleteArticle(id uuid.UUID) error {
 	// Get article with media to cleanup
 	article, err := s.repo.GetByID(id)
 	if err == nil && article != nil {
-		// Cleanup physical directory for this article
-		s.imageProcessor.CleanupArticleImages(id.String())
+		fmt.Printf("Cleaning up files for article: %s\n", id)
 
-		// Cleanup media records
+		// 1. Cleanup specific media records first (if they have individual file records)
 		for _, am := range article.MediaList {
-			s.mediaRepo.DeleteMediaByUrl(am.Media.FileURL)
+			if am.Media != nil && am.Media.FileURL != "" {
+				if err := s.imageProcessor.DeleteImage(am.Media.FileURL); err != nil {
+					fmt.Printf("Warning: Failed to delete physical file %s: %v\n", am.Media.FileURL, err)
+				}
+				s.mediaRepo.DeleteMediaByUrl(am.Media.FileURL)
+			}
+		}
+
+		// 2. Cleanup the entire article directory (images used in Markdown, thumbnails, etc.)
+		if err := s.imageProcessor.CleanupArticleImages(id.String()); err != nil {
+			fmt.Printf("Warning: Failed to cleanup article directory: %v\n", err)
 		}
 	}
 
@@ -399,8 +408,8 @@ func (s *articleService) GetDiscussedArticles(limit int) ([]domain.Article, erro
 	return s.repo.GetDiscussed(limit)
 }
 
-func (s *articleService) GetRandomArticles(limit int) ([]domain.Article, error) {
-	return s.repo.GetRandom(limit)
+func (s *articleService) GetRandomArticles(limit int, excludeIDs []uuid.UUID) ([]domain.Article, error) {
+	return s.repo.GetRandom(limit, excludeIDs)
 }
 
 func (s *articleService) calculateArticleMetrics(article *domain.Article) {
@@ -408,41 +417,75 @@ func (s *articleService) calculateArticleMetrics(article *domain.Article) {
 		return
 	}
 
-	// 1. Calculate Depth (based on content length and media)
+	// Helper: Count headings (#)
+	headingCount := strings.Count(article.Content, "\n#") + 1 // +1 for the first heading if it starts the file
+	if !strings.HasPrefix(article.Content, "#") {
+		headingCount--
+	}
+
+	// 1. Calculate Depth (based on content length, headings and media)
+	// Depth represents how detailed/long the content is.
 	contentLen := len(article.Content)
 	imageCount := len(article.Images)
-	depth := (contentLen / 500) + (imageCount * 10)
-	if depth < 30 {
-		depth = 30 + (contentLen % 20)
+	if imageCount == 0 && len(article.MediaList) > 0 {
+		imageCount = len(article.MediaList)
 	}
-	if depth > 100 {
-		depth = 95 + (contentLen % 5)
-	}
-	article.Depth = depth
 
-	// 2. Calculate Complexity (based on unique words and sentence structure)
+	depthScore := (contentLen / 800) + (imageCount * 8) + (headingCount * 5)
+
+	// Normalize to 0-100
+	if depthScore < 20 {
+		depthScore = 20 + (contentLen % 10)
+	}
+	if depthScore > 100 {
+		depthScore = 95 + (contentLen % 5)
+	}
+	article.Depth = depthScore
+
+	// 2. Calculate Complexity (based on unique words, tags and structural complexity)
+	// Complexity represents the technical/intellectual difficulty.
 	words := strings.Fields(article.Content)
 	uniqueWords := make(map[string]bool)
 	for _, w := range words {
 		uniqueWords[strings.ToLower(w)] = true
 	}
 
-	complexity := (len(uniqueWords) / 100) + (len(article.Tags) * 5)
-	if complexity < 40 {
-		complexity = 45 + (len(words) % 25)
-	}
-	if complexity > 100 {
-		complexity = 90 + (len(words) % 10)
-	}
-	article.Complexity = complexity
+	complexityScore := (len(uniqueWords) / 120) + (len(article.Tags) * 6) + (headingCount * 3)
 
-	// 3. Calculate Impact (base on views, comments, and current time vs publish time)
-	impact := (article.ViewCount / 20) + (article.CommentCount * 5)
-	if impact < 50 {
-		impact = 60 + (article.ViewCount % 20) // Give it a high baseline for premium feel
+	// Normalize to 0-100
+	if complexityScore < 25 {
+		complexityScore = 25 + (len(words) % 15)
 	}
-	if impact > 100 {
-		impact = 98
+	if complexityScore > 100 {
+		complexityScore = 92 + (len(words) % 8)
 	}
-	article.Impact = impact
+	article.Complexity = complexityScore
+
+	// 3. Calculate Impact (base on real engagement: views, comments, and ratings)
+	// Impact represents how much this article resonated with the audience.
+
+	// Weight factors
+	viewWeight := float64(article.ViewCount) * 0.5
+	commentWeight := float64(article.CommentCount) * 15.0
+	ratingWeight := article.RatingAvg * float64(article.RatingCount+1) * 2.0
+
+	impactScore := int(viewWeight + commentWeight + ratingWeight)
+
+	// Adjust baseline for published articles so they don't look "dead"
+	baseline := 10
+	if article.ViewCount > 0 {
+		baseline = 40
+	}
+
+	finalImpact := baseline + impactScore
+
+	// Normalize to 0-100
+	if finalImpact > 100 {
+		finalImpact = 95 + (impactScore % 5)
+	}
+	if finalImpact < 10 && article.Status == domain.StatusPublished {
+		finalImpact = 15
+	}
+
+	article.Impact = finalImpact
 }

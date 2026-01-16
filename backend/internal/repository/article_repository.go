@@ -327,15 +327,20 @@ func (r *articleRepository) GetDiscussed(limit int) ([]domain.Article, error) {
 	return articles, nil
 }
 
-func (r *articleRepository) GetRandom(limit int) ([]domain.Article, error) {
+func (r *articleRepository) GetRandom(limit int, excludeIDs []uuid.UUID) ([]domain.Article, error) {
 	var articles []domain.Article
 
-	err := r.db.Model(&domain.Article{}).
+	query := r.db.Model(&domain.Article{}).
 		Preload("Category").
 		Preload("Author").
 		Preload("Images").
-		Where("status = ?", domain.StatusPublished).
-		Order("RANDOM()").
+		Where("status = ?", domain.StatusPublished)
+
+	if len(excludeIDs) > 0 {
+		query = query.Where("id NOT IN ?", excludeIDs)
+	}
+
+	err := query.Order("RANDOM()").
 		Limit(limit).
 		Find(&articles).Error
 
@@ -348,4 +353,19 @@ func (r *articleRepository) GetRandom(limit int) ([]domain.Article, error) {
 	}
 
 	return articles, nil
+}
+
+func (r *articleRepository) IncrementViewCount(id uuid.UUID) error {
+	return r.db.Model(&domain.Article{}).Where("id = ?", id).
+		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
+}
+
+func (r *articleRepository) IncrementCommentCount(id uuid.UUID) error {
+	return r.db.Model(&domain.Article{}).Where("id = ?", id).
+		UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
+}
+
+func (r *articleRepository) DecrementCommentCount(id uuid.UUID) error {
+	return r.db.Model(&domain.Article{}).Where("id = ?", id).
+		UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - 1, 0)")).Error
 }

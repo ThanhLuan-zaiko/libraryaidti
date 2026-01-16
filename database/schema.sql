@@ -229,6 +229,7 @@ CREATE TABLE article_views (
 
     ip_address INET,
     user_agent TEXT,
+    session_duration INTEGER, -- Duration in seconds, NULL for old records, >= 30 for valid views
     viewed_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -245,7 +246,14 @@ CREATE TABLE article_ratings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     article_id UUID REFERENCES articles(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    score INT NOT NULL CHECK (score >= 1 AND score <= 5),
+    
+    score INT NOT NULL CHECK (score >= 1 AND score <= 5), -- Overall Score
+    
+    -- Detailed Criteria
+    content_score INT DEFAULT 0,  -- Chất lượng nội dung
+    clarity_score INT DEFAULT 0,  -- Cách trình bày
+    relevance_score INT DEFAULT 0, -- Tính ứng dụng
+    
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE (article_id, user_id)
@@ -339,6 +347,9 @@ CREATE INDEX idx_article_media_versions_media_id ON article_media_versions(media
 -- Analytics & Logs
 CREATE INDEX idx_article_views_article_id ON article_views(article_id);
 CREATE INDEX idx_article_views_viewed_at ON article_views(viewed_at);
+-- View tracking indexes for deduplication and valid view counting
+CREATE INDEX idx_article_views_dedup ON article_views(article_id, ip_address, viewed_at DESC);
+CREATE INDEX idx_article_views_valid ON article_views(article_id, session_duration) WHERE session_duration >= 30;
 CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX idx_system_logs_user_id ON system_logs(user_id);
 
@@ -484,3 +495,21 @@ SELECT * FROM seo_redirects;
 SELECT * FROM article_seo_redirects;
 
 SELECT * FROM comments;
+SELECT * FROM article_ratings;
+SELECT * FROM article_views;
+
+UPDATE articles 
+SET view_count = (
+    SELECT COUNT(*) 
+    FROM article_views 
+    WHERE article_views.article_id = articles.id 
+    AND article_views.session_duration >= 30
+);
+
+UPDATE articles 
+SET comment_count = (
+    SELECT COUNT(*) 
+    FROM comments 
+    WHERE comments.article_id = articles.id 
+    AND comments.is_deleted = false
+);

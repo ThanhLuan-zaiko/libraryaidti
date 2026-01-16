@@ -47,6 +47,11 @@ export const commentService = {
         await apiClient.delete(`/comments/${id}`);
     },
 
+    async update(id: string, content: string): Promise<Comment> {
+        const res = await apiClient.put<Comment>(`/comments/${id}`, { content });
+        return res.data;
+    },
+
     async restore(id: string): Promise<void> {
         await apiClient.put(`/comments/${id}/restore`);
     },

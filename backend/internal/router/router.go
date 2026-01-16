@@ -12,21 +12,22 @@ import (
 )
 
 type Router struct {
-	articleHandler   *handler.ArticleHandler
-	categoryHandler  *handler.CategoryHandler
-	tagHandler       *handler.TagHandler
-	authHandler      *handler.AuthHandler
-	statsHandler     *handler.StatsHandler
-	dashboardHandler *handler.DashboardHandler
-	parentHandler    *handler.UserHandler
-	userHandler      *handler.UserHandler
-	uploadHandler    *handler.UploadHandler
-	seoHandler       *handler.SeoHandler
-	commentHandler   *handler.CommentHandler // Added
-	ratingHandler    *handler.RatingHandler  // Added
-	userRepo         domain.UserRepository
-	wsHub            *ws.Hub
-	cache            *middleware.ResponseCache
+	articleHandler      *handler.ArticleHandler
+	categoryHandler     *handler.CategoryHandler
+	tagHandler          *handler.TagHandler
+	authHandler         *handler.AuthHandler
+	statsHandler        *handler.StatsHandler
+	dashboardHandler    *handler.DashboardHandler
+	parentHandler       *handler.UserHandler
+	userHandler         *handler.UserHandler
+	uploadHandler       *handler.UploadHandler
+	seoHandler          *handler.SeoHandler
+	commentHandler      *handler.CommentHandler      // Added
+	ratingHandler       *handler.RatingHandler       // Added
+	viewTrackingHandler *handler.ViewTrackingHandler // Added
+	userRepo            domain.UserRepository
+	wsHub               *ws.Hub
+	cache               *middleware.ResponseCache
 }
 
 func NewRouter(
@@ -41,28 +42,35 @@ func NewRouter(
 	seoHandler *handler.SeoHandler,
 	commentHandler *handler.CommentHandler, // Added
 	ratingHandler *handler.RatingHandler, // Added
+	viewTrackingHandler *handler.ViewTrackingHandler, // Added
 	wsHub *ws.Hub,
 	cache *middleware.ResponseCache,
 ) *Router {
 	return &Router{
-		articleHandler:   articleHandler,
-		categoryHandler:  categoryHandler,
-		tagHandler:       tagHandler,
-		authHandler:      authHandler,
-		statsHandler:     statsHandler,
-		dashboardHandler: dashboardHandler,
-		userHandler:      userHandler,
-		uploadHandler:    uploadHandler,
-		seoHandler:       seoHandler,
-		commentHandler:   commentHandler, // Added
-		ratingHandler:    ratingHandler,  // Added
-		userRepo:         userHandler.GetService().GetRepo(),
-		wsHub:            wsHub,
-		cache:            cache,
+		articleHandler:      articleHandler,
+		categoryHandler:     categoryHandler,
+		tagHandler:          tagHandler,
+		authHandler:         authHandler,
+		statsHandler:        statsHandler,
+		dashboardHandler:    dashboardHandler,
+		userHandler:         userHandler,
+		uploadHandler:       uploadHandler,
+		seoHandler:          seoHandler,
+		commentHandler:      commentHandler,      // Added
+		ratingHandler:       ratingHandler,       // Added
+		viewTrackingHandler: viewTrackingHandler, // Added
+		userRepo:            userHandler.GetService().GetRepo(),
+		wsHub:               wsHub,
+		cache:               cache,
 	}
 }
 
 func (r *Router) Setup(engine *gin.Engine) {
+	// 0. Logger Middleware (First to capture everything)
+	engine.Use(middleware.LoggerMiddleware())
+	// 0.1 Error Handler Middleware
+	engine.Use(middleware.ErrorHandlerMiddleware())
+
 	// CORS Middleware
 	allowedOrigins := map[string]bool{
 		"http://localhost:3000":    true,
@@ -117,14 +125,19 @@ func (r *Router) Setup(engine *gin.Engine) {
 			articles.GET("", r.articleHandler.GetArticles)
 			articles.GET("/trending", r.articleHandler.GetTrending)
 			articles.GET("/discussed", r.articleHandler.GetDiscussed)
-			articles.GET("/random", middleware.CacheMiddleware(r.cache, time.Second*10), r.articleHandler.GetRandom)
+			// View tracking - public endpoint with rate limiting (10 req/min)
+			articles.POST("/:id/track-view", middleware.RateLimitMiddleware(rate.Limit(0.16), 3), r.viewTrackingHandler.TrackView)
+			articles.GET("/:id/views", r.viewTrackingHandler.GetViewCount)
+			// Random articles - No cache to ensure randomness, but rate limited to prevent abuse
+			// 1 request/sec, burst 5
+			articles.GET("/random", middleware.RateLimitMiddleware(rate.Limit(1.0), 5), r.articleHandler.GetRandom)
 			articles.GET("/:id", r.articleHandler.GetArticle)
 			articles.GET("/:id/relations", r.articleHandler.GetArticleRelations)
 
 			// Public Comment Routes (Read-only)
 			articles.GET("/:id/comments", r.commentHandler.GetComments)
 			articles.GET("/:id/comments/:commentId/replies", r.commentHandler.GetReplies)
-			articles.GET("/:id/rating", r.ratingHandler.GetRating)
+			articles.GET("/:id/rating", middleware.OptionalAuthMiddleware(r.userRepo), r.ratingHandler.GetRating)
 		}
 
 		// Stats routes
@@ -172,6 +185,8 @@ func (r *Router) Setup(engine *gin.Engine) {
 			// Comment Management (Protected)
 			// Rate limit: 0.33 rps (approx 20/min), burst 5
 			protected.POST("/comments", middleware.RateLimitMiddleware(rate.Limit(0.33), 5), r.commentHandler.CreateComment)
+			// Edit comment - similar rate limit to creation
+			protected.PUT("/comments/:id", middleware.RateLimitMiddleware(rate.Limit(0.33), 5), r.commentHandler.UpdateComment)
 			// Stricter rate limiting for delete/restore operations (10/min)
 			protected.DELETE("/comments/:id", middleware.RateLimitMiddleware(rate.Limit(0.16), 3), r.commentHandler.DeleteComment)
 			protected.PUT("/comments/:id/restore", middleware.RateLimitMiddleware(rate.Limit(0.16), 3), r.commentHandler.RestoreComment)

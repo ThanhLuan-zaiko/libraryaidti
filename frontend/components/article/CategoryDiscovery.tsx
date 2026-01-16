@@ -31,10 +31,13 @@ const CategoryDiscovery: React.FC<CategoryDiscoveryProps> = ({
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
 
+    const isLoadingRef = useRef(false);
+
     const fetchMore = useCallback(async (isInitial = false) => {
         if (!hasMore || articles.length >= MAX_CATEGORY_ITEMS) return;
-        if (!isInitial && fetchingMore) return;
+        if (isLoadingRef.current) return;
 
+        isLoadingRef.current = true;
         if (isInitial) setLoading(true);
         else setFetchingMore(true);
 
@@ -56,10 +59,9 @@ const CategoryDiscovery: React.FC<CategoryDiscoveryProps> = ({
                 );
 
                 if (newArticles.length === 0 || res.data.length < 6) {
-                    // Category exhausted
                     if (articles.length + newArticles.length < 3) {
-                        // Not enough category content, trigger random fallback IMMEDIATELY
-                        const randomRes = await articleService.getRandom(6);
+                        const excludeIds = articles.map(a => a.id);
+                        const randomRes = await articleService.getRandom(6, excludeIds);
                         const randomArticles = randomRes.data.filter((a: Article) =>
                             a.id !== currentArticleId &&
                             !articles.some(existing => existing.id === a.id) &&
@@ -74,8 +76,8 @@ const CategoryDiscovery: React.FC<CategoryDiscoveryProps> = ({
                 }
                 setPage(nextPage);
             } else {
-                // Already in fallback mode
-                const res = await articleService.getRandom(6);
+                const excludeIds = articles.map(a => a.id);
+                const res = await articleService.getRandom(6, excludeIds);
                 newArticles = res.data.filter((a: Article) =>
                     a.id !== currentArticleId && !articles.some(existing => existing.id === a.id)
                 );
@@ -85,9 +87,12 @@ const CategoryDiscovery: React.FC<CategoryDiscoveryProps> = ({
                 }
             }
 
-            setArticles(prev => [...prev, ...newArticles].slice(0, MAX_CATEGORY_ITEMS));
+            setArticles(prev => {
+                const combined = [...prev, ...newArticles];
+                const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+                return unique.slice(0, MAX_CATEGORY_ITEMS);
+            });
 
-            // If we still have very little and haven't hit limit, keep hasMore true
             if (articles.length + newArticles.length < MAX_CATEGORY_ITEMS && newArticles.length > 0) {
                 setHasMore(true);
             } else if (newArticles.length === 0) {
@@ -100,8 +105,9 @@ const CategoryDiscovery: React.FC<CategoryDiscoveryProps> = ({
         } finally {
             setLoading(false);
             setFetchingMore(false);
+            isLoadingRef.current = false;
         }
-    }, [hasMore, articles, page, categoryId, currentArticleId, isFallback, fetchingMore]);
+    }, [hasMore, articles, page, categoryId, currentArticleId, isFallback]);
 
     // Initial load if needed
     useEffect(() => {

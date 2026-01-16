@@ -63,6 +63,7 @@ export interface ArticleInput {
     image_url?: string;
     is_featured?: boolean;
     images?: {
+        local_id?: string; // For frontend referencing
         image_url?: string;
         image_data?: string;
         description?: string;
@@ -118,14 +119,18 @@ export const articleService = {
         return response.data;
     },
 
-    async getRandom(limit: number = 10): Promise<{ data: Article[] }> {
-        const response = await apiClient.get<{ data: Article[] }>(`${ARTICLES_URL}/random?limit=${limit}`);
+    async getRandom(limit: number = 10, excludeIds: string[] = []): Promise<{ data: Article[] }> {
+        let url = `${ARTICLES_URL}/random?limit=${limit}`;
+        if (excludeIds.length > 0) {
+            url += `&exclude_ids=${excludeIds.join(',')}`;
+        }
+        const response = await apiClient.get<{ data: Article[] }>(url);
         return response.data;
     },
 
     async getById(id: string) {
-        const response = await apiClient.get<Article>(`${ARTICLES_URL}/${id}`);
-        return response.data;
+        const response = await apiClient.get<{ data: Article }>(`${ARTICLES_URL}/${id}`);
+        return response.data.data;
     },
 
     async create(data: ArticleInput) {
@@ -172,13 +177,17 @@ export const articleService = {
         return response.data;
     },
 
-    async rateArticle(id: string, score: number) {
-        const response = await apiClient.post(`${ARTICLES_URL}/${id}/rate`, { score });
+    async rateArticle(id: string, details: { content: number; clarity: number; relevance: number }) {
+        const response = await apiClient.post(`${ARTICLES_URL}/${id}/rate`, details);
         return response.data;
     },
 
     async getArticleRating(id: string) {
-        const response = await apiClient.get<{ average: number; count: number; user_rating: number | null }>(`${ARTICLES_URL}/${id}/rating`);
+        const response = await apiClient.get<{
+            average: number;
+            count: number;
+            user_rating: { content: number; clarity: number; relevance: number } | null
+        }>(`${ARTICLES_URL}/${id}/rating`);
         return response.data;
     }
 };

@@ -6,6 +6,9 @@ import { categoryService, Category } from '@/services/category.service';
 import { tagService, Tag } from '@/services/tag.service';
 import ArticleEditorHeader from './ArticleEditorHeader';
 import ArticleEditorSidebar from './ArticleEditorSidebar';
+import MarkdownEditor, { MarkdownEditorRef } from './MarkdownEditor';
+import { getImageUrl } from '@/utils/image';
+import ConfirmModal from '@/components/common/ConfirmModal';
 
 interface ArticleEditorProps {
     articleId?: string;
@@ -14,10 +17,12 @@ interface ArticleEditorProps {
 
 const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData }) => {
     const router = useRouter();
+    const editorRef = React.useRef<MarkdownEditorRef>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [showSeoSection, setShowSeoSection] = useState(false);
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     const [formData, setFormData] = useState<ArticleInput>({
         title: '',
@@ -40,23 +45,27 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
     });
 
     const [redirects, setRedirects] = useState<ArticleSeoRedirect[]>([]);
+    const [isDirty, setIsDirty] = useState(false);
+    const [initialFormData, setInitialFormData] = useState<ArticleInput | null>(null);
 
     useEffect(() => {
         if (initialData) {
-            setRedirects(initialData.redirects || []);
-            setFormData({
-                title: initialData.title,
-                slug: initialData.slug,
-                content: initialData.content,
+            const mappedImages = initialData.images?.map((img, i) => ({
+                local_id: `image-existing-${i}`,
+                image_url: img.image_url,
+                description: img.description,
+                is_primary: img.is_primary
+            })) || [];
+
+            const initial: ArticleInput = {
+                title: initialData.title || '',
+                slug: initialData.slug || '',
+                content: initialData.content || '',
                 summary: initialData.summary || '',
-                status: initialData.status,
+                status: initialData.status || 'DRAFT',
                 category_id: initialData.category_id || '',
-                is_featured: initialData.is_featured,
-                images: initialData.images?.map(img => ({
-                    image_url: img.image_url,
-                    description: img.description,
-                    is_primary: img.is_primary
-                })) || [],
+                is_featured: !!initialData.is_featured,
+                images: mappedImages,
                 tags: (initialData as any).tags || [],
                 seo_metadata: (initialData as any).seo_metadata || {
                     meta_title: '',
@@ -65,10 +74,53 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                     og_image: '',
                     canonical_url: '',
                 },
-                related_article_ids: Array.from(new Set((initialData as any).related_articles?.map((a: Article) => a.id) || [])),
-            });
+                related_article_ids: Array.from(new Set((initialData as any).related_articles?.map((a: Article) => a.id) || [])) as string[],
+            };
+
+            setRedirects(initialData.redirects || []);
+            setFormData(initial);
+            setInitialFormData(initial);
+            setIsDirty(false);
+        } else if (!initialFormData) {
+            // Set initial blank state for new articles
+            setInitialFormData(formData);
         }
     }, [initialData]);
+
+    // Handle beforeunload to warn user about unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isDirty) {
+                e.preventDefault();
+                e.returnValue = ''; // Standard way to show browser confirmation
+                return '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isDirty]);
+
+    // Deep compare formData with initialFormData to set isDirty
+    useEffect(() => {
+        if (!initialFormData) return;
+
+        // Simple but effective dirty check for this form structure
+        // We exclude transient state like files or local image_data from the comparison
+        const stripTransient = (data: ArticleInput) => ({
+            ...data,
+            images: data.images?.map(i => ({ ...i, file: undefined, image_data: undefined }))
+        });
+
+        const currentStr = JSON.stringify(stripTransient(formData));
+        const initialStr = JSON.stringify(stripTransient(initialFormData));
+
+        if (currentStr !== initialStr) {
+            setIsDirty(true);
+        } else {
+            setIsDirty(false);
+        }
+    }, [formData, initialFormData]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -125,13 +177,20 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                 setSuccess("Bài viết đã được tạo thành công!");
             }
 
+            // Update initial state to represent current saved state (reset dirty)
+            setInitialFormData(formData);
+            setIsDirty(false);
+
             // Delay redirect to allow user to see the success message
             setTimeout(() => {
                 router.push('/admin/articles');
             }, 2000);
         } catch (error: any) {
             console.error("Failed to save article", error);
-            setError(error.response?.data?.error || "Có lỗi xảy ra khi lưu bài viết.");
+            // Handle new backend error structure: { success: false, error: { code: 400, message: "..." } }
+            // OR fallback to old simple { error: "..." } if any endpoints still use it
+            const msg = error.response?.data?.error?.message || error.response?.data?.error || "Có lỗi xảy ra khi lưu bài viết.";
+            setError(msg);
         } finally {
             setLoading(false);
         }
@@ -172,6 +231,14 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
     const completion = getFormCompletion();
     const activeStep = getActiveStep();
 
+    const handleCancel = () => {
+        if (isDirty) {
+            setShowConfirmModal(true);
+        } else {
+            router.push('/admin/articles');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 pb-20 font-sans text-gray-900">
             <ArticleEditorHeader
@@ -180,7 +247,23 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                 completion={completion}
                 activeStep={activeStep}
                 onSubmit={handleSubmit}
-                onCancel={() => router.push('/admin/articles')}
+                onCancel={handleCancel}
+            />
+
+            {/* Confirm Unsaved Changes Modal */}
+            <ConfirmModal
+                isOpen={showConfirmModal}
+                title="Bỏ dở việc soạn thảo?"
+                message="Bạn có các thay đổi chưa được lưu. Nếu rời đi bây giờ, những nội dung mới nhất sẽ bị mất vĩnh viễn."
+                confirmText="Rời khỏi trang"
+                cancelText="Tiếp tục soạn"
+                onConfirm={() => {
+                    setShowConfirmModal(false);
+                    // Reset dirty state to allow navigation
+                    setIsDirty(false);
+                    router.push('/admin/articles');
+                }}
+                onCancel={() => setShowConfirmModal(false)}
             />
 
             {/* Success Notification */}
@@ -263,17 +346,14 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                         </div>
 
                         {/* Content Area */}
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col min-h-[600px]">
-                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Nội dung chi tiết</span>
-                                <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">Markdown Supported</span>
-                            </div>
-                            <textarea
-                                name="content"
+                        <div className="flex flex-col min-h-[600px]">
+                            <MarkdownEditor
+                                ref={editorRef}
                                 value={formData.content}
-                                onChange={handleChange}
+                                images={formData.images || []}
+                                onChange={(val) => setFormData(prev => ({ ...prev, content: val }))}
                                 placeholder="Viết nội dung bài viết của bạn tại đây..."
-                                className="flex-1 w-full p-6 border-none focus:ring-0 resize-none text-base leading-relaxed text-gray-800 font-article"
+                                minHeight="600px"
                             />
                         </div>
                     </div>
@@ -288,6 +368,39 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({ articleId, initialData })
                         onToggleFeatured={handleToggleFeatured}
                         onToggleSeoSection={() => setShowSeoSection(!showSeoSection)}
                         onRedirectsChange={setRedirects}
+                        onImageInsert={(id, desc, idx) => {
+                            if (editorRef.current) {
+                                // Design a more readable placeholder: ![Ảnh 1: [Mô tả]](image-ref-id)
+                                const label = desc ? `Ảnh ${idx}: ${desc}` : `Ảnh ${idx}`;
+                                const md = `\n![${label}](${id})\n`;
+                                const success = editorRef.current.insertText(md);
+                                if (!success) {
+                                    setError("Vui lòng chuyển sang chế độ 'Soạn thảo' hoặc 'Song song' để chèn ảnh.");
+                                }
+                                return success;
+                            }
+                            return false;
+                        }}
+                        onImageRemove={(image) => {
+                            if (!image) return;
+
+                            let newContent = formData.content;
+                            const idsToRemove = [image.local_id, image.image_url].filter(Boolean) as string[];
+
+                            if (idsToRemove.length === 0) return;
+
+                            idsToRemove.forEach(id => {
+                                // Create regex to find Markdown image pattern regardless of alt text
+                                // Matches: ![any text](id) or ![any text](server-url)
+                                const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                const regex = new RegExp(`\\n?!\\[.*?\\]\\(${escapedId}\\)\\n?`, 'g');
+                                newContent = newContent.replace(regex, '\n');
+                            });
+
+                            if (newContent !== formData.content) {
+                                setFormData(prev => ({ ...prev, content: newContent.trim() }));
+                            }
+                        }}
                         onNotify={(type, msg) => {
                             if (type === 'error') setError(msg);
                             else setSuccess(msg);

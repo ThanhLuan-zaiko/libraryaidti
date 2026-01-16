@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { HiX, HiPlus, HiChevronDown } from 'react-icons/hi';
+import { HiX, HiPlus, HiChevronDown, HiCheck } from 'react-icons/hi';
 import { Article, articleService } from '@/services/article.service';
 
 interface RelatedArticleSelectorProps {
@@ -97,9 +97,9 @@ const RelatedArticleSelector: React.FC<RelatedArticleSelectorProps> = ({
                 minimal: true
             });
 
-            // Filter out current article and already selected ones
+            // Do not filter out selected articles so we can toggle them in the list
             const newArticles = result.data.filter(
-                a => a.id !== currentArticleId && !selectedArticleIds.includes(a.id)
+                a => a.id !== currentArticleId
             );
 
             if (append) {
@@ -128,13 +128,16 @@ const RelatedArticleSelector: React.FC<RelatedArticleSelectorProps> = ({
         }
     }, [inputValue, showSuggestions, debouncedSearch]);
 
-    const handleAddArticle = (article: Article) => {
-        if (!selectedArticleIds.includes(article.id)) {
+    const handleToggleArticle = (article: Article) => {
+        const isSelected = selectedArticleIds.includes(article.id);
+        if (isSelected) {
+            onRelatedArticlesChange(selectedArticleIds.filter(aid => aid !== article.id));
+            setSelectedArticles(prev => prev.filter(a => a.id !== article.id));
+        } else {
             onRelatedArticlesChange([...selectedArticleIds, article.id]);
             setSelectedArticles(prev => [...prev, article]);
         }
-        setInputValue('');
-        setShowSuggestions(false);
+        // Do NOT close suggestions or clear input for batch selection
     };
 
     const handleRemoveArticle = (id: string) => {
@@ -217,19 +220,31 @@ const RelatedArticleSelector: React.FC<RelatedArticleSelectorProps> = ({
                         >
                             {filteredArticles.length > 0 ? (
                                 <>
-                                    {filteredArticles.map(article => (
-                                        <div
-                                            key={article.id}
-                                            onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                handleAddArticle(article);
-                                            }}
-                                            className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-none group transition-colors"
-                                        >
-                                            <div className="text-sm font-medium text-gray-800 group-hover:text-blue-700">{article.title}</div>
-                                            <div className="text-xs text-gray-500 truncate mt-0.5">{article.slug}</div>
-                                        </div>
-                                    ))}
+                                    {filteredArticles.map(article => {
+                                        const isSelected = selectedArticleIds.includes(article.id);
+                                        return (
+                                            <div
+                                                key={article.id}
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    handleToggleArticle(article);
+                                                }}
+                                                className={`px-4 py-3 flex items-center justify-between hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-none group transition-colors ${isSelected ? 'bg-blue-50' : ''}`}
+                                            >
+                                                <div className="flex-1 min-w-0 pr-4">
+                                                    <div className={`text-sm font-medium transition-colors ${isSelected ? 'text-blue-700' : 'text-gray-800 group-hover:text-blue-700'}`}>
+                                                        {article.title}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 truncate mt-0.5">{article.slug}</div>
+                                                </div>
+                                                <div className={`flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300 group-hover:border-blue-400'}`}>
+                                                    {isSelected && (
+                                                        <HiCheck className="w-3.5 h-3.5 text-white" strokeWidth={2} />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                     {isLoading && (
                                         <div className="px-4 py-2 text-xs text-center text-gray-400 bg-gray-50 italic">
                                             Đang tải...

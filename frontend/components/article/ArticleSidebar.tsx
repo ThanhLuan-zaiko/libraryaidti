@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { getImageUrl } from '@/utils/image';
 import { HiOutlineShare, HiOutlineArrowNarrowRight, HiCheck } from 'react-icons/hi';
 import { Article } from '@/services/article.service';
 
@@ -81,6 +82,8 @@ const ArticleSidebar: React.FC<ArticleSidebarProps> = ({ article, toc, readingPr
                                     const isActive = activeId === item.id;
                                     const num = (index + 1).toString().padStart(2, '0');
 
+                                    const imageMatch = item.label.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+
                                     return (
                                         <li key={item.id} className="group cursor-pointer" onClick={() => scrollTo(item.id)}>
                                             <div className={`flex items-center gap-6 transition-all duration-500 ${isActive ? 'translate-x-4' : 'hover:translate-x-2'}`}>
@@ -88,7 +91,15 @@ const ArticleSidebar: React.FC<ArticleSidebarProps> = ({ article, toc, readingPr
                                                     {num}
                                                 </span>
                                                 <span className={`text-base tracking-tight transition-colors ${isActive ? 'text-gray-950 font-black' : 'text-gray-400 font-bold group-hover:text-gray-950'} ${item.level > 2 ? 'pl-4' : ''}`}>
-                                                    {item.label}
+                                                    {imageMatch ? (
+                                                        <img
+                                                            src={getImageUrl(imageMatch[2])}
+                                                            alt={imageMatch[1]}
+                                                            className="w-full h-auto rounded-xl shadow-sm border border-gray-100 my-2 block"
+                                                        />
+                                                    ) : (
+                                                        item.label
+                                                    )}
                                                 </span>
                                             </div>
                                         </li>

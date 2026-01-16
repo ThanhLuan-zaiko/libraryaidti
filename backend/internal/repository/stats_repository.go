@@ -161,6 +161,7 @@ func (r *statsRepository) GetAnalytics(days int) ([]domain.AnalyticsData, error)
 		LEFT JOIN (
 			SELECT CAST(viewed_at AS DATE) as d, COUNT(*) as count
 			FROM article_views
+			WHERE session_duration >= 30
 			GROUP BY d
 		) v ON ds.d = v.d
 		ORDER BY ds.d ASC

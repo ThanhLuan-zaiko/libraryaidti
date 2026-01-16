@@ -18,9 +18,13 @@ import CategoryDiscovery from '@/components/article/CategoryDiscovery';
 import ArticleGallery from '@/components/article/ArticleGallery';
 import CommentSection from '@/components/comments/CommentSection';
 import StarRating from '@/components/article/StarRating';
+import { useViewTracking } from '@/hooks/useViewTracking';
 
 export default function ArticleDetail() {
     const { slug } = useParams();
+
+    // Track view after 30 seconds
+    useViewTracking(slug as string);
     const [article, setArticle] = useState<Article | null>(null);
     const [related, setRelated] = useState<Article[]>([]);
     const [categoryArticles, setCategoryArticles] = useState<Article[]>([]);
@@ -48,9 +52,14 @@ export default function ArticleDetail() {
             const cleanText = p.replace(/^- /g, '').trim(); // Remove leading hyphens if any
 
             // Create a label: first sentence or first 50 chars
-            let labelText = cleanText.split(/[.!?:]/)[0];
-            if (labelText.length > 50) labelText = labelText.substring(0, 47) + '...';
-            if (labelText.length < 5 && cleanText.length > 10) labelText = cleanText.substring(0, 50) + '...';
+            let labelText = cleanText;
+            const isImage = /^!\[.*\]\(.*\)$/.test(cleanText);
+
+            if (!isImage) {
+                labelText = cleanText.split(/[.!?:]/)[0];
+                if (labelText.length > 50) labelText = labelText.substring(0, 47) + '...';
+                if (labelText.length < 5 && cleanText.length > 10) labelText = cleanText.substring(0, 50) + '...';
+            }
 
             extractedToc.push({
                 id,
@@ -118,9 +127,14 @@ export default function ArticleDetail() {
     if (loading) return <ArticleLoading />;
     if (!article) return <ArticleNotFound />;
 
-    const formattedDate = article.published_at
-        ? format(new Date(article.published_at), 'dd MMMM, yyyy', { locale: vi })
-        : format(new Date(article.created_at), 'dd MMMM, yyyy', { locale: vi });
+    const getDateString = () => {
+        const dateStr = article.published_at || article.created_at;
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        return isNaN(date.getTime()) ? '' : format(date, 'dd MMMM, yyyy', { locale: vi });
+    };
+
+    const formattedDate = getDateString();
 
     const readTime = Math.max(1, Math.ceil((article.content?.split(/\s+/).length || 0) / 200));
 

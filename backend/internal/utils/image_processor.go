@@ -175,7 +175,8 @@ func (p *ImageProcessor) generateFilename() string {
 
 // CleanupArticleImages removes all images for a specific article
 func (p *ImageProcessor) CleanupArticleImages(articleID string) error {
-	dirPath := filepath.Join("uploads", "articles", articleID)
+	// Consistently use project root structure
+	dirPath := filepath.Join("..", "..", "uploads", "articles", articleID)
 	return os.RemoveAll(dirPath)
 }
 
@@ -185,7 +186,7 @@ func (p *ImageProcessor) DeleteImage(relativeURL string) error {
 		return nil
 	}
 	// relativeURL is like "/uploads/articles/<id>/<filename>"
-	// We need to convert it to local path "./uploads/articles/<id>/<filename>"
-	path := "." + filepath.FromSlash(relativeURL)
+	// We need to convert it to local path "../../uploads/articles/<id>/<filename>"
+	path := filepath.Join("..", "..") + filepath.FromSlash(relativeURL)
 	return os.Remove(path)
 }

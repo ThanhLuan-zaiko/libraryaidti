@@ -117,20 +117,23 @@ type ArticleStatusLog struct {
 }
 
 type ArticleRating struct {
-	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	ArticleID uuid.UUID `gorm:"type:uuid;not null;index:idx_article_user_rating,unique" json:"article_id"`
-	UserID    uuid.UUID `gorm:"type:uuid;not null;index:idx_article_user_rating,unique" json:"user_id"`
-	Score     int       `gorm:"not null;check:score >= 1 AND score <= 5" json:"score"`
-	CreatedAt time.Time `gorm:"default:now()" json:"created_at"`
-	UpdatedAt time.Time `gorm:"default:now()" json:"updated_at"`
+	ID             uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	ArticleID      uuid.UUID `gorm:"type:uuid;not null;index:idx_article_user_rating,unique" json:"article_id"`
+	UserID         uuid.UUID `gorm:"type:uuid;not null;index:idx_article_user_rating,unique" json:"user_id"`
+	Score          int       `gorm:"not null;check:score >= 1 AND score <= 5" json:"score"`
+	ContentScore   int       `gorm:"default:0" json:"content_score"`
+	ClarityScore   int       `gorm:"default:0" json:"clarity_score"`
+	RelevanceScore int       `gorm:"default:0" json:"relevance_score"`
+	CreatedAt      time.Time `gorm:"default:now()" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"default:now()" json:"updated_at"`
 }
 
 type SeoMetadata struct {
 	ID              uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	ArticleID       uuid.UUID `gorm:"type:uuid;unique" json:"article_id"`
-	MetaTitle       string    `gorm:"type:varchar(255)" json:"meta_title"`
-	MetaDescription string    `gorm:"type:text" json:"meta_description"`
-	MetaKeywords    string    `gorm:"type:text" json:"meta_keywords"`
+	MetaTitle       string    `gorm:"type:varchar(255)" json:"meta_title" binding:"max=100"`
+	MetaDescription string    `gorm:"type:text" json:"meta_description" binding:"max=300"`
+	MetaKeywords    string    `gorm:"type:text" json:"meta_keywords" binding:"max=500"`
 	OgImage         string    `gorm:"type:text" json:"og_image"`
 	CanonicalURL    string    `gorm:"type:text" json:"canonical_url"`
 }
@@ -153,7 +156,10 @@ type ArticleRepository interface {
 	GetOutgoingRelations(id uuid.UUID) ([]RelatedArticleInfo, error)
 	GetTrending(limit int) ([]Article, error)
 	GetDiscussed(limit int) ([]Article, error)
-	GetRandom(limit int) ([]Article, error)
+	GetRandom(limit int, excludeIDs []uuid.UUID) ([]Article, error)
+	IncrementViewCount(id uuid.UUID) error
+	IncrementCommentCount(id uuid.UUID) error
+	DecrementCommentCount(id uuid.UUID) error
 }
 
 type ArticleService interface {
@@ -172,7 +178,7 @@ type ArticleService interface {
 	GetArticleRelations(id uuid.UUID) ([]RelatedArticleInfo, []RelatedArticleInfo, error)
 	GetTrendingArticles(limit int) ([]Article, error)
 	GetDiscussedArticles(limit int) ([]Article, error)
-	GetRandomArticles(limit int) ([]Article, error)
+	GetRandomArticles(limit int, excludeIDs []uuid.UUID) ([]Article, error)
 }
 
 type RatingRepository interface {
@@ -181,8 +187,14 @@ type RatingRepository interface {
 	GetStats(articleID string) (float64, int64, error)
 }
 
+type RatingDetail struct {
+	Content   int `json:"content"`
+	Clarity   int `json:"clarity"`
+	Relevance int `json:"relevance"`
+}
+
 type RatingService interface {
-	RateArticle(articleID, userID string, score int) error
+	RateArticle(articleID, userID string, details RatingDetail) error
 	GetRatingStats(articleID string) (float64, int64, error)
 	GetUserRating(articleID, userID string) (*ArticleRating, error)
 }

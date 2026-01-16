@@ -19,6 +19,8 @@ interface ArticleEditorSidebarProps {
     onToggleSeoSection: () => void;
     onRedirectsChange?: (redirects: ArticleSeoRedirect[]) => void;
     onNotify: (type: 'success' | 'error', message: string) => void;
+    onImageInsert?: (url: string, description?: string, index?: number) => boolean;
+    onImageRemove?: (image: any) => void; // Using any for simplicity as ArticleInput['images'][0] is not exported
 }
 
 const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
@@ -31,6 +33,8 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
     onToggleSeoSection,
     onRedirectsChange,
     onNotify,
+    onImageInsert,
+    onImageRemove,
 }) => {
     const [confirmOverwrite, setConfirmOverwrite] = React.useState(false);
     const [newRedirectSlug, setNewRedirectSlug] = React.useState('');
@@ -178,6 +182,8 @@ const ArticleEditorSidebar: React.FC<ArticleEditorSidebarProps> = ({
                 <ImageGallery
                     images={formData.images || []}
                     onImagesChange={(images) => onFormDataChange({ images })}
+                    onImageInsert={onImageInsert}
+                    onImageRemove={onImageRemove}
                 />
             </div>
 

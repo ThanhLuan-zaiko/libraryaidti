@@ -1,9 +1,10 @@
-import React, { useRef } from 'react';
-import { HiCloudUpload, HiTrash, HiStar } from 'react-icons/hi';
+import React, { useRef, useState } from 'react';
+import { HiCloudUpload, HiTrash, HiStar, HiPlus, HiCheck, HiExclamationCircle } from 'react-icons/hi';
 import { FaSpinner } from 'react-icons/fa';
 import { getImageUrl } from '@/utils/image';
 
 interface ImageItem {
+    local_id?: string;         // For stable referencing in Markdown
     image_url?: string;        // For existing images from server
     image_data?: string;       // For new images (base64)
     description?: string;
@@ -14,13 +15,17 @@ interface ImageItem {
 interface ImageGalleryProps {
     images: ImageItem[];
     onImagesChange: (images: ImageItem[]) => void;
+    onImageInsert?: (url: string, description?: string, index?: number) => boolean;
+    onImageRemove?: (image: ImageItem) => void;
 }
 
-const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange }) => {
+const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange, onImageInsert, onImageRemove }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = React.useState(false);
     const [processing, setProcessing] = React.useState(false);
     const [progress, setProgress] = React.useState({ current: 0, total: 0 });
+    const [showInserted, setShowInserted] = useState(false);
+    const [insertError, setInsertError] = useState(false);
 
     const convertFileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -49,6 +54,7 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange }) =
             try {
                 const base64 = await convertFileToBase64(file);
                 const newImage: ImageItem = {
+                    local_id: `image-${Date.now()}-${i}`,
                     image_data: base64,
                     is_primary: currentImages.length === 0 && i === 0,
                     file: file,
@@ -85,6 +91,7 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange }) =
             try {
                 const base64 = await convertFileToBase64(file);
                 const newImage: ImageItem = {
+                    local_id: `image-${Date.now()}-${i}`,
                     image_data: base64,
                     is_primary: currentImages.length === 0 && i === 0,
                     file: file,
@@ -110,11 +117,18 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange }) =
     };
 
     const handleRemoveImage = (index: number) => {
+        const removedImage = images[index];
         const newImages = images.filter((_, i) => i !== index);
         // If removed image was primary, make first image primary
-        if (images[index].is_primary && newImages.length > 0) {
+        if (removedImage.is_primary && newImages.length > 0) {
             newImages[0].is_primary = true;
         }
+
+        // Notify parent about removal for content cleanup
+        if (onImageRemove) {
+            onImageRemove(removedImage);
+        }
+
         onImagesChange(newImages);
     };
 
@@ -184,7 +198,7 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange }) =
                     {images
                         .map((img, originalIndex) => ({ img, originalIndex }))
                         .sort((a, b) => (a.img.is_primary === b.img.is_primary ? 0 : a.img.is_primary ? -1 : 1))
-                        .map(({ img: image, originalIndex }) => {
+                        .map(({ img: image, originalIndex }, visualIndex) => {
                             const imageUrl = image.image_data || image.image_url || '';
                             // Use a more stable key than index: imageUrl or a fallback with index
                             const itemKey = `image-${imageUrl || originalIndex}`;
@@ -197,7 +211,7 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange }) =
                                     <div className="relative aspect-video rounded-lg overflow-hidden border-2 border-gray-200 group-hover:border-blue-400 transition-all shadow-sm">
                                         <img
                                             src={getImageUrl(imageUrl)}
-                                            alt={`Image ${originalIndex + 1}`}
+                                            alt={`Image ${visualIndex + 1}`}
                                             className="w-full h-full object-cover"
                                         />
 
@@ -209,12 +223,11 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange }) =
                                             </div>
                                         )}
 
-                                        {/* Preview Badge for new images */}
-                                        {image.image_data && (
-                                            <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
-                                                Preview
-                                            </div>
-                                        )}
+                                        {/* Order Badge (Visible) */}
+                                        <div className="absolute top-2 right-2 bg-blue-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg border border-white/20 flex items-center space-x-1 transition-all group-hover:bg-blue-500">
+                                            <span>Ảnh {visualIndex + 1}</span>
+                                            {image.image_data && <span className="w-1 h-1 bg-white rounded-full animate-pulse"></span>}
+                                        </div>
 
                                         {/* Hover Actions */}
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
@@ -225,6 +238,26 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange }) =
                                                     title="Đặt làm ảnh chính"
                                                 >
                                                     <HiStar className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            {onImageInsert && (
+                                                <button
+                                                    onClick={() => {
+                                                        const success = onImageInsert(image.local_id || imageUrl, image.description, visualIndex + 1);
+                                                        if (success) {
+                                                            setShowInserted(true);
+                                                            setInsertError(false);
+                                                            setTimeout(() => setShowInserted(false), 2000);
+                                                        } else {
+                                                            setInsertError(true);
+                                                            setShowInserted(true); // Re-use the same container/logic
+                                                            setTimeout(() => setShowInserted(false), 3000);
+                                                        }
+                                                    }}
+                                                    className="bg-blue-600 text-white p-2 rounded-full shadow-md hover:bg-blue-700 transition-colors"
+                                                    title="Chèn vào nội dung"
+                                                >
+                                                    <HiPlus className="w-4 h-4" />
                                                 </button>
                                             )}
                                             <button
@@ -250,6 +283,25 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagesChange }) =
                         })}
                 </div>
             )}
+
+            {/* Global Toast Notification for Insertion */}
+            <div className={`fixed bottom-10 left-1/2 transform -translate-x-1/2 z-[100] transition-all duration-500 ${showInserted ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+                {insertError ? (
+                    <div className="bg-amber-900/90 backdrop-blur-md border border-amber-500/20 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-4">
+                        <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center">
+                            <HiExclamationCircle className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-sm font-black uppercase tracking-widest text-amber-400">Không thể chèn (Đang xem thử)</span>
+                    </div>
+                ) : (
+                    <div className="bg-gray-900/90 backdrop-blur-md border border-white/10 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-4">
+                        <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
+                            <HiCheck className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-sm font-black uppercase tracking-widest text-blue-400">Đã chèn ảnh</span>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

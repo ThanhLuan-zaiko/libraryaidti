@@ -11,6 +11,7 @@ import (
 
 type CommentService interface {
 	Create(comment *domain.Comment) error
+	Update(id string, userID string, content string) error // userID to check ownership
 	GetByID(id string) (*domain.Comment, error)
 	GetByArticleID(articleID string, page, limit int) ([]domain.Comment, int64, error)
 	GetRepliesByParentID(parentID string, page, limit int) ([]domain.Comment, int64, error)
@@ -19,11 +20,15 @@ type CommentService interface {
 }
 
 type commentService struct {
-	repo repository.CommentRepository
+	repo        repository.CommentRepository
+	articleRepo domain.ArticleRepository
 }
 
-func NewCommentService(repo repository.CommentRepository) CommentService {
-	return &commentService{repo: repo}
+func NewCommentService(repo repository.CommentRepository, articleRepo domain.ArticleRepository) CommentService {
+	return &commentService{
+		repo:        repo,
+		articleRepo: articleRepo,
+	}
 }
 
 func (s *commentService) Create(comment *domain.Comment) error {
@@ -79,7 +84,12 @@ func (s *commentService) Create(comment *domain.Comment) error {
 		}
 	}
 
-	return s.repo.Create(comment)
+	err := s.repo.Create(comment)
+	if err == nil {
+		// Sync comment_count in articles table
+		_ = s.articleRepo.IncrementCommentCount(comment.ArticleID)
+	}
+	return err
 }
 
 // calculateDepth recursively calculates the depth of a comment in the tree
@@ -114,6 +124,50 @@ func (s *commentService) GetRepliesByParentID(parentID string, page, limit int) 
 	return s.repo.GetRepliesByParentID(parentID, page, limit)
 }
 
+func (s *commentService) Update(id string, userID string, content string) error {
+	comment, err := s.repo.GetByID(id)
+	if err != nil {
+		return errors.New("bình luận không tồn tại")
+	}
+
+	// Check ownership
+	if comment.UserID.String() != userID {
+		return errors.New("bạn không có quyền chỉnh sửa bình luận này")
+	}
+
+	// Check if comment is deleted
+	if comment.IsDeleted {
+		return errors.New("không thể chỉnh sửa bình luận đã bị thu hồi")
+	}
+
+	// Check edit time limit (15 minutes)
+	const editTimeLimit = 15 * time.Minute
+	if time.Since(comment.CreatedAt) > editTimeLimit {
+		return errors.New("đã hết thời gian chỉnh sửa (15 phút)")
+	}
+
+	// Validate content
+	if content == "" {
+		return errors.New("nội dung không được để trống")
+	}
+
+	const MaxCommentLength = 5000
+	const MinCommentLength = 1
+	contentLen := len([]rune(content))
+	if contentLen > MaxCommentLength {
+		return errors.New("bình luận quá dài (tối đa 5000 ký tự)")
+	}
+	if contentLen < MinCommentLength {
+		return errors.New("bình luận quá ngắn")
+	}
+
+	// Update content and timestamp
+	comment.Content = content
+	comment.UpdatedAt = time.Now().UTC()
+
+	return s.repo.Update(comment)
+}
+
 func (s *commentService) Delete(id string, userID string) error {
 	comment, err := s.repo.GetByID(id)
 	if err != nil {
@@ -125,7 +179,12 @@ func (s *commentService) Delete(id string, userID string) error {
 		return errors.New("bạn không có quyền thu hồi bình luận này")
 	}
 
-	return s.repo.Delete(id)
+	err = s.repo.Delete(id)
+	if err == nil {
+		// Sync comment_count in articles table
+		_ = s.articleRepo.DecrementCommentCount(comment.ArticleID)
+	}
+	return err
 }
 
 func (s *commentService) Restore(id string, userID string) error {

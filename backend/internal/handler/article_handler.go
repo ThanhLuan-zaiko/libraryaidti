@@ -1,13 +1,18 @@
 package handler
 
 import (
+	apperrors "backend/internal/core/error"
+	"backend/internal/core/response"
 	"backend/internal/domain"
+	"backend/internal/logger"
 	"backend/internal/middleware"
 	"backend/internal/utils"
 	"backend/internal/ws"
 	"fmt"
 	"net/http"
 	"strconv"
+
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -46,6 +51,7 @@ type ArticleCreateRequest struct {
 }
 
 type Base64Image struct {
+	LocalID     string `json:"local_id"`   // For frontend referencing
 	ImageData   string `json:"image_data"` // base64 encoded image
 	ImageUrl    string `json:"image_url"`  // existing image URL
 	Description string `json:"description"`
@@ -55,7 +61,7 @@ type Base64Image struct {
 func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 	var req ArticleCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(apperrors.TranslateValidationError(err))
 		return
 	}
 
@@ -88,8 +94,7 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 
 	// Create article first (which creates initial version and status log)
 	if err := h.service.CreateArticle(&article); err != nil {
-		fmt.Printf("ERROR: CreateArticle failed: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(apperrors.NewInternalError(err))
 		return
 	}
 
@@ -168,8 +173,9 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 		}
 		res := <-resultsChan
 		if res.err != nil {
-			fmt.Printf("ERROR: Image processing failed at index %d: %v\n", res.index, res.err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process image: " + res.err.Error()})
+			logger.Get().Error("Image processing failed", "index", res.index, "error", res.err)
+			// Using AppError with detail
+			c.Error(apperrors.NewInternalServerError("Failed to process image", res.err))
 			return
 		}
 		tempResults[res.index] = res
@@ -201,6 +207,22 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 	article.Images = articleImages
 	article.MediaList = mediaList
 	article.Tags = req.Tags
+
+	// Process Markdown content: replace placeholders/base64 with actual URLs
+	for i, imgReq := range req.Images {
+		target := imgReq.ImageData
+		if imgReq.LocalID != "" {
+			target = imgReq.LocalID
+		}
+
+		if target != "" && i < len(tempResults) {
+			res := tempResults[i]
+			if res.err == nil && res.img.ImageURL != "" {
+				article.Content = strings.ReplaceAll(article.Content, target, res.img.ImageURL)
+			}
+		}
+	}
+
 	if req.SeoMetadata != nil {
 		req.SeoMetadata.ArticleID = article.ID
 		article.SEOMetadata = req.SeoMetadata
@@ -208,8 +230,7 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 
 	// Update to save images, tags, SEO, and relations
 	if err := h.service.UpdateArticle(&article); err != nil {
-		fmt.Printf("ERROR: UpdateArticle failed during finalize: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update article with relations: " + err.Error()})
+		c.Error(apperrors.NewInternalServerError("Failed to update article with relations", err))
 		return
 	}
 
@@ -218,7 +239,7 @@ func (h *ArticleHandler) CreateArticle(c *gin.Context) {
 	h.cache.ClearByPrefix("/api/v1/admin")
 	h.hub.BroadcastEvent("admin_data_updated", gin.H{"module": "articles", "action": "create"})
 
-	c.JSON(http.StatusCreated, article)
+	response.Created(c, article)
 }
 
 func (h *ArticleHandler) GetArticles(c *gin.Context) {
@@ -241,17 +262,14 @@ func (h *ArticleHandler) GetArticles(c *gin.Context) {
 
 	articles, total, err := h.service.GetArticles(page, limit, filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(apperrors.NewInternalError(err))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": articles,
-		"meta": gin.H{
-			"total": total,
-			"page":  page,
-			"limit": limit,
-		},
+	response.SuccessWithMeta(c, articles, gin.H{
+		"total": total,
+		"page":  page,
+		"limit": limit,
 	})
 }
 
@@ -268,19 +286,19 @@ func (h *ArticleHandler) GetArticle(c *gin.Context) {
 				return
 			}
 
-			c.JSON(http.StatusNotFound, gin.H{"error": "Article not found"})
+			c.Error(apperrors.NewNotFound("Article not found"))
 			return
 		}
-		c.JSON(http.StatusOK, article)
+		response.Success(c, article)
 		return
 	}
 
 	article, err := h.service.GetArticleByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Article not found"})
+		c.Error(apperrors.NewNotFound("Article not found"))
 		return
 	}
-	c.JSON(http.StatusOK, article)
+	response.Success(c, article)
 }
 
 func (h *ArticleHandler) UpdateArticle(c *gin.Context) {
@@ -293,7 +311,7 @@ func (h *ArticleHandler) UpdateArticle(c *gin.Context) {
 
 	var req ArticleCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(apperrors.TranslateValidationError(err))
 		return
 	}
 
@@ -437,6 +455,16 @@ func (h *ArticleHandler) UpdateArticle(c *gin.Context) {
 	article.MediaList = finalMediaList
 	article.Images = finalImageList
 	article.Tags = req.Tags
+
+	// Process Markdown content: replace base64 with actual URLs
+	for i, imgReq := range req.Images {
+		if imgReq.ImageData != "" && i < len(tempResults) {
+			res := tempResults[i]
+			if res.err == nil && res.img.ImageURL != "" {
+				article.Content = strings.ReplaceAll(article.Content, imgReq.ImageData, res.img.ImageURL)
+			}
+		}
+	}
 
 	// Related Articles
 	if len(req.RelatedArticleIDs) > 0 {
@@ -635,8 +663,19 @@ func (h *ArticleHandler) GetDiscussed(c *gin.Context) {
 // GetRandom returns random articles for discovery
 func (h *ArticleHandler) GetRandom(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	excludeIDsStr := c.Query("exclude_ids")
 
-	articles, err := h.service.GetRandomArticles(limit)
+	var excludeIDs []uuid.UUID
+	if excludeIDsStr != "" {
+		ids := strings.Split(excludeIDsStr, ",")
+		for _, idStr := range ids {
+			if id, err := uuid.Parse(strings.TrimSpace(idStr)); err == nil {
+				excludeIDs = append(excludeIDs, id)
+			}
+		}
+	}
+
+	articles, err := h.service.GetRandomArticles(limit, excludeIDs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch random articles"})
 		return

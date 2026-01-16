@@ -18,9 +18,7 @@ func NewRatingHandler(service domain.RatingService) *RatingHandler {
 
 func (h *RatingHandler) RateArticle(c *gin.Context) {
 	articleID := c.Param("id")
-	var req struct {
-		Score int `json:"score" binding:"required"`
-	}
+	var req domain.RatingDetail
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -34,7 +32,7 @@ func (h *RatingHandler) RateArticle(c *gin.Context) {
 	}
 	userID := userIDVal.(uuid.UUID).String()
 
-	if err := h.service.RateArticle(articleID, userID, req.Score); err != nil {
+	if err := h.service.RateArticle(articleID, userID, req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -51,14 +49,17 @@ func (h *RatingHandler) GetRating(c *gin.Context) {
 		return
 	}
 
-	var userRating *int
+	var userRating *domain.RatingDetail
 	userIDVal, exists := c.Get("user_id")
 	if exists {
 		userID := userIDVal.(uuid.UUID).String()
 		rating, err := h.service.GetUserRating(articleID, userID)
 		if err == nil && rating != nil {
-			score := rating.Score
-			userRating = &score
+			userRating = &domain.RatingDetail{
+				Content:   rating.ContentScore,
+				Clarity:   rating.ClarityScore,
+				Relevance: rating.RelevanceScore,
+			}
 		}
 	}
 

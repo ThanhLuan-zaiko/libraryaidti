@@ -54,16 +54,27 @@ func (h *CommentHandler) CreateComment(c *gin.Context) {
 		return
 	}
 
-	// Broadcast to article room
+	// Fetch the comment with user info for broadcasting and response
+	completeComment, err := h.service.GetByID(comment.ID.String())
+	if err != nil {
+		// Fallback to original comment if fetch fails
+		completeComment = comment
+	}
+
+	// Broadcast to article room with complete user data
 	go func() {
-		h.hub.BroadcastToRoom(req.ArticleID.String(), "new_comment", comment)
+		h.hub.BroadcastToRoom(req.ArticleID.String(), "new_comment", completeComment)
 	}()
 
-	c.JSON(http.StatusCreated, comment)
+	c.JSON(http.StatusCreated, completeComment)
 }
 
 func (h *CommentHandler) GetComments(c *gin.Context) {
 	articleID := c.Param("id")
+	if _, err := uuid.Parse(articleID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid article ID"})
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
@@ -130,6 +141,44 @@ func (h *CommentHandler) DeleteComment(c *gin.Context) {
 	}()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Comment deleted"})
+}
+
+func (h *CommentHandler) UpdateComment(c *gin.Context) {
+	id := c.Param("id")
+	userIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req struct {
+		Content string `json:"content" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Update the comment
+	if err := h.service.Update(id, userIDStr.(uuid.UUID).String(), req.Content); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Fetch complete comment with user info for broadcasting and response
+	completeComment, err := h.service.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải bình luận đã cập nhật"})
+		return
+	}
+
+	// Broadcast to article room so all viewers get the update
+	go func() {
+		h.hub.BroadcastToRoom(completeComment.ArticleID.String(), "comment_updated", completeComment)
+	}()
+
+	c.JSON(http.StatusOK, completeComment)
 }
 
 func (h *CommentHandler) RestoreComment(c *gin.Context) {

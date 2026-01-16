@@ -6,6 +6,7 @@ interface CommentFormProps {
     placeholder?: string;
     loading?: boolean;
     autoFocus?: boolean;
+    initialValue?: string;
 }
 
 export default function CommentForm({
@@ -13,9 +14,10 @@ export default function CommentForm({
     onCancel,
     placeholder = 'What are your thoughts?',
     loading = false,
-    autoFocus = false
+    autoFocus = false,
+    initialValue = ''
 }: CommentFormProps) {
-    const [content, setContent] = useState('');
+    const [content, setContent] = useState(initialValue);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

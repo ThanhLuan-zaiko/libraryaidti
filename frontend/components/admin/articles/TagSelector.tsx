@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { HiX, HiChevronDown } from 'react-icons/hi';
+import { HiX, HiChevronDown, HiCheck } from 'react-icons/hi';
 import { tagService } from '@/services/tag.service';
 
 interface Tag {
@@ -50,10 +50,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({ selectedTags, onTagsChange })
                 search: search
             });
 
-            // Filter out already selected tags
-            const newTags = result.data.filter(
-                t => !selectedTags.find(st => st.id === t.id)
-            );
+            const newTags = result.data;
 
             if (append) {
                 setFilteredTags(prev => [...prev, ...newTags]);
@@ -81,12 +78,14 @@ const TagSelector: React.FC<TagSelectorProps> = ({ selectedTags, onTagsChange })
         }
     }, [inputValue, showSuggestions, debouncedSearch]); // Added debouncedSearch to dependency array
 
-    const handleAddTag = (tag: Tag) => {
-        if (!selectedTags.find(t => t.id === tag.id)) {
+    const handleToggleTag = (tag: Tag) => {
+        const isSelected = selectedTags.find(t => t.id === tag.id);
+        if (isSelected) {
+            onTagsChange(selectedTags.filter(t => t.id !== tag.id));
+        } else {
             onTagsChange([...selectedTags, tag]);
         }
-        setInputValue('');
-        setShowSuggestions(false);
+        // Do NOT close suggestions or clear input for batch selection
     };
 
     const handleRemoveTag = (tagId?: string) => {
@@ -98,8 +97,10 @@ const TagSelector: React.FC<TagSelectorProps> = ({ selectedTags, onTagsChange })
         if (e.key === 'Enter') {
             e.preventDefault();
             if (filteredTags.length > 0) {
-                handleAddTag(filteredTags[0]);
+                handleToggleTag(filteredTags[0]);
             }
+        } else if (e.key === 'Escape') {
+            setShowSuggestions(false);
         }
     };
 
@@ -178,18 +179,26 @@ const TagSelector: React.FC<TagSelectorProps> = ({ selectedTags, onTagsChange })
                         >
                             {filteredTags.length > 0 ? (
                                 <>
-                                    {filteredTags.map(tag => (
-                                        <div
-                                            key={tag.id}
-                                            onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                handleAddTag(tag);
-                                            }}
-                                            className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 hover:text-blue-700 transition-colors"
-                                        >
-                                            {tag.name}
-                                        </div>
-                                    ))}
+                                    {filteredTags.map(tag => {
+                                        const isSelected = selectedTags.some(st => st.id === tag.id);
+                                        return (
+                                            <div
+                                                key={tag.id}
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    handleToggleTag(tag);
+                                                }}
+                                                className={`px-3 py-2 flex items-center justify-between hover:bg-blue-50 cursor-pointer text-sm transition-colors group ${isSelected ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:text-blue-700'}`}
+                                            >
+                                                <span>{tag.name}</span>
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300 group-hover:border-blue-400'}`}>
+                                                    {isSelected && (
+                                                        <HiCheck className="w-3 h-3 text-white" strokeWidth={2} />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                     {isLoading && (
                                         <div className="px-3 py-2 text-xs text-center text-gray-400 bg-gray-50 italic">
                                             Đang tải...

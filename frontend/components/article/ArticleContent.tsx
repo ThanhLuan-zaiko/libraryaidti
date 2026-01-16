@@ -1,8 +1,10 @@
-'use client';
-
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { FaQuoteLeft, FaFacebook, FaTwitter, FaLinkedin, FaLink } from 'react-icons/fa';
 import { Article } from '@/services/article.service';
+import { getImageUrl } from '@/utils/image';
 
 interface ArticleContentProps {
     article: Article;
@@ -11,6 +13,20 @@ interface ArticleContentProps {
 }
 
 const ArticleContent: React.FC<ArticleContentProps> = ({ article, content, onCopyLink }) => {
+    const rawContent = content || article.content || '';
+    const images = article.images || [];
+
+    // Pre-process content: Convert Markdown images inside HTML blocks to HTML <img> tags
+    // This is needed because CommonMark specs ignore Markdown parsing inside block-level HTML tags (like <div...>)
+    const processContent = (text: string) => {
+        // Regex to match ![alt](url)
+        return text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+            return `<img src="${src}" alt="${alt}" />`;
+        });
+    };
+
+    const displayContent = processContent(rawContent);
+
     return (
         <article className="lg:col-span-8 flex flex-col space-y-16">
             {/* Grand Abstract Card */}
@@ -23,21 +39,79 @@ const ArticleContent: React.FC<ArticleContentProps> = ({ article, content, onCop
             </div>
 
             {/* High-Performance Article Body */}
-            <div
-                className="article-body max-w-full break-words overflow-hidden
-                    text-xl md:text-2xl leading-[1.8] text-gray-800 font-normal tracking-tight
-                    [&>p]:mb-12 [&>p]:font-medium [&>p]:text-gray-700
-                    [&>h2]:text-4xl [&>h2]:md:text-6xl [&>h2]:font-black [&>h2]:text-gray-950 [&>h2]:mt-24 [&>h2]:mb-10 [&>h2]:tracking-tighter [&>h2]:leading-[1.1]
-                    [&>h3]:text-3xl [&>h3]:md:text-4xl [&>h3]:font-black [&>h3]:text-gray-900 [&>h3]:mt-16 [&>h3]:mb-8 [&>h3]:tracking-tight
-                    [&>blockquote]:border-l-[10px] [&>blockquote]:border-blue-600 [&>blockquote]:bg-gray-50 [&>blockquote]:p-12 [&>blockquote]:md:p-20 [&>blockquote]:my-20 [&>blockquote]:rounded-[3rem] [&>blockquote]:text-3xl [&>blockquote]:md:text-4xl [&>blockquote]:font-black [&>blockquote]:italic [&>blockquote]:text-gray-900 [&>blockquote]:shadow-inner
-                    [&>img]:rounded-[3rem] [&>img]:my-20 [&>img]:shadow-3xl [&>img]:w-full [&>img]:object-cover [&>img]:border-4 [&>img]:border-white
-                    [&>ul]:my-10 [&>ul]:list-none [&>ul]:pl-0 [&>ul]:space-y-6
-                    [&>ol]:my-10 [&>ol]:list-decimal [&>ol]:pl-12 [&>ol]:space-y-6 [&>ol]:font-black [&>ol]:text-gray-900
-                    [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-8 [&_a]:decoration-4 [&_a]:decoration-blue-100 [&_a]:hover:decoration-blue-600 [&_a]:transition-all
-                    [&_li]:text-gray-600 [&_li]:font-medium [&_li]:pl-4 [&_li]:border-l-2 [&_li]:border-blue-50 hover:[&_li]:border-blue-600
-                    [&>hr]:my-20 [&>hr]:border-gray-200"
-                dangerouslySetInnerHTML={{ __html: content || article.content }}
-            />
+            <div className="article-body max-w-full break-words overflow-hidden">
+                <div className="prose prose-lg md:prose-xl max-w-none
+                    prose-headings:font-black prose-headings:tracking-tighter prose-headings:text-gray-900
+                    prose-h2:text-4xl prose-h2:md:text-6xl prose-h2:mt-24 prose-h2:mb-10
+                    prose-h3:text-3xl prose-h3:md:text-4xl prose-h3:mt-16 prose-h3:mb-8
+                    prose-p:text-xl prose-p:md:text-2xl prose-p:leading-[1.8] prose-p:text-gray-800 prose-p:font-normal prose-p:mb-12
+                    prose-a:text-blue-600 prose-a:no-underline prose-a:border-b-4 prose-a:border-blue-100 hover:prose-a:border-blue-600 prose-a:transition-all
+                    prose-blockquote:border-l-[10px] prose-blockquote:border-blue-600 prose-blockquote:bg-gray-50 prose-blockquote:p-12 prose-blockquote:rounded-[3rem] prose-blockquote:text-3xl prose-blockquote:font-black prose-blockquote:italic prose-blockquote:text-gray-900 prose-blockquote:not-italic prose-blockquote:shadow-inner prose-blockquote:my-20
+                    prose-img:rounded-[3rem] prose-img:shadow-3xl prose-img:border-4 prose-img:border-white prose-img:w-full prose-img:object-cover prose-img:my-20
+                    prose-li:text-xl prose-li:text-gray-600 prose-li:marker:text-blue-600
+                    [&>ul]:list-disc [&>ul]:pl-8 [&>ul]:space-y-4
+                    [&>ol]:list-decimal [&>ol]:pl-8 [&>ol]:space-y-4
+                ">
+                    <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw]}
+                        components={{
+                            img: ({ src, alt, ...props }) => {
+                                if (!src || src === '') return null;
+
+                                // Try to find the image in the article images by URL
+                                const findMatch = (img: any) =>
+                                    (img.image_url && (img.image_url === src || getImageUrl(img.image_url) === src));
+
+                                const refImage = images.find(findMatch);
+
+                                // "Smart Order": Labels match visual sorting (Primary first)
+                                const sortedImages = [...images].sort((a, b) =>
+                                    (a.is_primary === b.is_primary ? 0 : a.is_primary ? -1 : 1)
+                                );
+                                const visualIndex = sortedImages.findIndex(findMatch);
+
+                                const finalSrc = getImageUrl(typeof src === 'string' ? src : undefined);
+
+                                if (!finalSrc || finalSrc === '') return null;
+
+                                // Dynamic label from database description or alt text
+                                let dynamicAlt = alt;
+                                if (refImage && visualIndex !== -1) {
+                                    const label = refImage.description || '';
+                                    dynamicAlt = label;
+                                }
+
+                                return (
+                                    <span className="block my-20">
+                                        <img
+                                            src={finalSrc}
+                                            alt={dynamicAlt || ''}
+                                            className="w-full rounded-[3rem] shadow-2xl border-4 border-white object-cover"
+                                            {...props}
+                                        />
+                                        {dynamicAlt && (
+                                            <span className="block text-center text-sm md:text-base text-gray-500 mt-6 font-bold italic tracking-wide">
+                                                {dynamicAlt}
+                                            </span>
+                                        )}
+                                    </span>
+                                );
+                            },
+                            // Custom Blockquote styling
+                            blockquote: ({ children }) => (
+                                <blockquote className="border-l-[10px] border-blue-600 bg-gray-50 p-12 md:p-20 my-20 rounded-[3rem] shadow-inner">
+                                    <div className="text-3xl md:text-4xl font-black italic text-gray-900 leading-tight">
+                                        {children}
+                                    </div>
+                                </blockquote>
+                            )
+                        }}
+                    >
+                        {displayContent}
+                    </ReactMarkdown>
+                </div>
+            </div>
 
             {/* Article Maturity / Engagement Footer */}
             <div className="pt-20 mt-28 border-t-2 border-gray-100 flex flex-col xl:flex-row xl:items-center justify-between gap-12">

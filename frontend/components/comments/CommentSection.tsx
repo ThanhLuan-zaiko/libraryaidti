@@ -47,6 +47,7 @@ export default function CommentSection({ articleId }: CommentSectionProps) {
 
     // Initial load
     useEffect(() => {
+        if (!articleId || articleId === 'undefined') return;
         fetchComments(1);
         joinRoom(articleId);
     }, [articleId, fetchComments, joinRoom]);
@@ -123,10 +124,29 @@ export default function CommentSection({ articleId }: CommentSectionProps) {
             });
         });
 
+        const unsubscribeUpdate = subscribe('comment_updated', (data: any) => {
+            const updatedComment = data as Comment;
+            setComments(prev => {
+                const updateInList = (list: Comment[]): Comment[] => {
+                    return list.map(comment => {
+                        if (comment.id === updatedComment.id) {
+                            return updatedComment;
+                        }
+                        if (comment.replies) {
+                            return { ...comment, replies: updateInList(comment.replies) };
+                        }
+                        return comment;
+                    });
+                };
+                return updateInList(prev);
+            });
+        });
+
         return () => {
             unsubscribeNew();
             unsubscribeDelete();
             unsubscribeRestore();
+            unsubscribeUpdate();
         };
     }, [subscribe, articleId, addCommentToState]);
 
@@ -191,6 +211,16 @@ export default function CommentSection({ articleId }: CommentSectionProps) {
         }
     };
 
+    const handleEdit = async (id: string, content: string) => {
+        try {
+            await commentService.update(id, content);
+            toast.success('Đã cập nhật bình luận');
+        } catch (error: any) {
+            const message = error.response?.data?.error || 'Không thể cập nhật bình luận';
+            toast.error(message);
+        }
+    };
+
     return (
         <section className="border-t border-gray-100 pt-16 lg:pt-24 mt-16" id="comments">
             <div className="flex items-center justify-between mb-12">
@@ -226,6 +256,7 @@ export default function CommentSection({ articleId }: CommentSectionProps) {
                 onReply={handleReply}
                 onDelete={handleDelete}
                 onRestore={handleRestore}
+                onEdit={handleEdit}
                 articleId={articleId}
             />
 

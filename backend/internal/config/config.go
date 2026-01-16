@@ -15,6 +15,7 @@ type Config struct {
 	DBName     string
 	DBSSLMode  string
 	ServerPort string
+	AppEnv     string // dev, prod, staging
 }
 
 func LoadConfig() *Config {
@@ -40,6 +41,7 @@ func LoadConfig() *Config {
 		DBName:     getEnv("DB_NAME", "libraryaidti_db"),
 		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
 		ServerPort: getEnv("SERVER_PORT", "8080"),
+		AppEnv:     getEnv("APP_ENV", "dev"),
 	}
 }
 
