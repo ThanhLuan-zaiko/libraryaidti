@@ -77,6 +77,8 @@ type AuditRepository interface {
 	CreateSystemLog(log *SystemLog) error
 	GetAuditLogs(page, limit int, filter map[string]interface{}) ([]AuditLog, int64, error)
 	GetSystemLogs(page, limit int, filter map[string]interface{}) ([]SystemLog, int64, error)
+	GetAuditLog(id uuid.UUID) (*AuditLog, error)
+	GetSystemLog(id uuid.UUID) (*SystemLog, error)
 	DeleteOldAuditLogs(before time.Time) error
 	DeleteOldSystemLogs(before time.Time) error
 }
@@ -86,5 +88,7 @@ type AuditService interface {
 	LogSystemEvent(userID *uuid.UUID, action, tableName string, recordID uuid.UUID, oldData, newData interface{}) error
 	GetAuditLogs(page, limit int, filter map[string]interface{}) ([]AuditLog, int64, error)
 	GetSystemLogs(page, limit int, filter map[string]interface{}) ([]SystemLog, int64, error)
+	GetAuditLog(id uuid.UUID) (*AuditLog, error)
+	GetSystemLog(id uuid.UUID) (*SystemLog, error)
 	CleanupOldLogs(days int) error
 }

@@ -5,16 +5,7 @@ import apiClient from '@/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-/**
- * Custom hook to track article views with 30-second minimum duration requirement
- * Features:
- * - Tracks time spent on page
- * - Handles tab visibility changes (Page Visibility API)
- * - Accumulates time when user switches tabs
- * - Only tracks view after 30 seconds of active viewing
- * - Sends beacon on page unload if >= 30s
- */
-export function useViewTracking(articleSlug: string) {
+export function useViewTracking(articleSlug: string | undefined | null) {
     const trackedRef = useRef<boolean>(false);
     const visibleRef = useRef<boolean>(typeof document !== 'undefined' ? !document.hidden : true);
     const accumulatedTimeRef = useRef<number>(0);
@@ -48,18 +39,12 @@ export function useViewTracking(articleSlug: string) {
                     });
                 } catch (error) {
                     console.error('[ViewTracking] Failed to track view:', error);
-                    // Reset tracked so it can try again if failed?
-                    // No, usually best to just log.
                 }
             } else {
-                // Not enough time yet, schedule another check in 5-10 seconds
-                // This handles cases where tab was hidden and visibleRef was false
                 if (timerRef.current) clearTimeout(timerRef.current);
                 timerRef.current = setTimeout(trackView, 10000);
             }
         };
-
-        // Handle visibility changes (tab switching)
         const handleVisibilityChange = () => {
             const now = Date.now();
 
@@ -86,12 +71,9 @@ export function useViewTracking(articleSlug: string) {
             }
         };
 
-        // Initial setup
         if (visibleRef.current) {
             timerRef.current = setTimeout(trackView, 30000);
         } else {
-            // If starting hidden, check periodically or wait for focus
-            // But let's just wait for focus to be safe and clean
         }
 
         document.addEventListener('visibilitychange', handleVisibilityChange);

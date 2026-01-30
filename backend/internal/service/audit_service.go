@@ -64,6 +64,14 @@ func (s *auditService) GetSystemLogs(page, limit int, filter map[string]interfac
 	return s.repo.GetSystemLogs(page, limit, filter)
 }
 
+func (s *auditService) GetAuditLog(id uuid.UUID) (*domain.AuditLog, error) {
+	return s.repo.GetAuditLog(id)
+}
+
+func (s *auditService) GetSystemLog(id uuid.UUID) (*domain.SystemLog, error) {
+	return s.repo.GetSystemLog(id)
+}
+
 func (s *auditService) CleanupOldLogs(days int) error {
 	if days <= 0 {
 		return nil

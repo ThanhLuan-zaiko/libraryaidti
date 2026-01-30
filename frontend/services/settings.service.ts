@@ -52,4 +52,9 @@ export const settingsService = {
         const response = await apiClient.get("/admin/settings-stats");
         return response.data;
     },
+
+    getLogById: async (id: string, type: 'audit' | 'system') => {
+        const response = await apiClient.get<LogEntry>(`/logs/${type}/${id}`);
+        return response.data;
+    },
 };

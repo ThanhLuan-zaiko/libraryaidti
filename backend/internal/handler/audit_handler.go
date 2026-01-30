@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type AuditHandler struct {
@@ -69,4 +70,36 @@ func (h *AuditHandler) GetSystemLogs(c *gin.Context) {
 		"page":  page,
 		"limit": limit,
 	})
+}
+
+func (h *AuditHandler) GetAuditLog(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	log, err := h.service.GetAuditLog(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Log not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, log)
+}
+
+func (h *AuditHandler) GetSystemLog(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	log, err := h.service.GetSystemLog(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Log not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, log)
 }

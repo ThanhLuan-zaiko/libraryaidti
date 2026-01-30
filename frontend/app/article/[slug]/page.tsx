@@ -23,9 +23,10 @@ import { useViewTracking } from '@/hooks/useViewTracking';
 export default function ArticleDetail() {
     const { slug } = useParams();
 
-    // Track view after 30 seconds
-    useViewTracking(slug as string);
     const [article, setArticle] = useState<Article | null>(null);
+
+    // Track view after 30 seconds - Use canonical slug from loaded article
+    useViewTracking(article?.slug);
     const [related, setRelated] = useState<Article[]>([]);
     const [categoryArticles, setCategoryArticles] = useState<Article[]>([]);
     const [loading, setLoading] = useState(true);

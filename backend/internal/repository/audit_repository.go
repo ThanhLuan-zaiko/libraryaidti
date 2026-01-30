@@ -4,6 +4,7 @@ import (
 	"backend/internal/domain"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -78,6 +79,24 @@ func (r *auditRepository) GetSystemLogs(page, limit int, filter map[string]inter
 	offset := (page - 1) * limit
 	err = query.Order("created_at DESC").Offset(offset).Limit(limit).Find(&logs).Error
 	return logs, total, err
+}
+
+func (r *auditRepository) GetAuditLog(id uuid.UUID) (*domain.AuditLog, error) {
+	var log domain.AuditLog
+	err := r.db.Preload("User").First(&log, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &log, nil
+}
+
+func (r *auditRepository) GetSystemLog(id uuid.UUID) (*domain.SystemLog, error) {
+	var log domain.SystemLog
+	err := r.db.Preload("User").First(&log, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &log, nil
 }
 
 func (r *auditRepository) DeleteOldAuditLogs(before time.Time) error {

@@ -11,16 +11,19 @@ import (
 type viewTrackingService struct {
 	viewRepo    domain.ViewTrackingRepository
 	articleRepo domain.ArticleRepository
+	seoService  domain.SeoService
 }
 
 // NewViewTrackingService creates a new view tracking service
 func NewViewTrackingService(
 	viewRepo domain.ViewTrackingRepository,
 	articleRepo domain.ArticleRepository,
+	seoService domain.SeoService,
 ) domain.ViewTrackingService {
 	return &viewTrackingService{
 		viewRepo:    viewRepo,
 		articleRepo: articleRepo,
+		seoService:  seoService,
 	}
 }
 
@@ -38,7 +41,16 @@ func (s *viewTrackingService) TrackView(identifier string, ipAddress string, use
 	if id, errParse := uuid.Parse(identifier); errParse == nil {
 		article, err = s.articleRepo.GetByID(id)
 	} else {
+		// Try direct slug match
 		article, err = s.articleRepo.GetBySlug(identifier)
+
+		// If not found, try to resolve alias (redirect)
+		if err != nil {
+			if destination, errRedir := s.seoService.GetDestination(identifier); errRedir == nil && destination != "" {
+				// Found an alias! Resolve the target article
+				article, err = s.articleRepo.GetBySlug(destination)
+			}
+		}
 	}
 
 	if err != nil || article == nil {

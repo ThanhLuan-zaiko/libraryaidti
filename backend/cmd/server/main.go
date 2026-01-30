@@ -135,7 +135,7 @@ func main() {
 
 	// View Tracking
 	viewTrackingRepo := repository.NewViewTrackingRepository(db.DB)
-	viewTrackingService := service.NewViewTrackingService(viewTrackingRepo, articleRepo)
+	viewTrackingService := service.NewViewTrackingService(viewTrackingRepo, articleRepo, seoService)
 	viewTrackingHandler := handler.NewViewTrackingHandler(viewTrackingService)
 
 	// Settings

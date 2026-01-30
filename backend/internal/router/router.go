@@ -22,11 +22,11 @@ type Router struct {
 	userHandler         *handler.UserHandler
 	uploadHandler       *handler.UploadHandler
 	seoHandler          *handler.SeoHandler
-	commentHandler      *handler.CommentHandler      // Added
-	ratingHandler       *handler.RatingHandler       // Added
-	viewTrackingHandler *handler.ViewTrackingHandler // Added
-	settingHandler      *handler.SettingHandler      // Added
-	auditHandler        *handler.AuditHandler        // Added
+	commentHandler      *handler.CommentHandler
+	ratingHandler       *handler.RatingHandler
+	viewTrackingHandler *handler.ViewTrackingHandler
+	settingHandler      *handler.SettingHandler
+	auditHandler        *handler.AuditHandler
 	userRepo            domain.UserRepository
 	wsHub               *ws.Hub
 	cache               *middleware.ResponseCache
@@ -60,11 +60,11 @@ func NewRouter(
 		userHandler:         userHandler,
 		uploadHandler:       uploadHandler,
 		seoHandler:          seoHandler,
-		commentHandler:      commentHandler,      // Added
-		ratingHandler:       ratingHandler,       // Added
-		viewTrackingHandler: viewTrackingHandler, // Added
-		settingHandler:      settingHandler,      // Added
-		auditHandler:        auditHandler,        // Added
+		commentHandler:      commentHandler,
+		ratingHandler:       ratingHandler,
+		viewTrackingHandler: viewTrackingHandler,
+		settingHandler:      settingHandler,
+		auditHandler:        auditHandler,
 		userRepo:            userHandler.GetService().GetRepo(),
 		wsHub:               wsHub,
 		cache:               cache,
@@ -259,7 +259,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 			logs := protected.Group("/logs")
 			{
 				logs.GET("/audit", r.auditHandler.GetAuditLogs)
+				logs.GET("/audit/:id", r.auditHandler.GetAuditLog)
 				logs.GET("/system", r.auditHandler.GetSystemLogs)
+				logs.GET("/system/:id", r.auditHandler.GetSystemLog)
 			}
 		}
 	}
