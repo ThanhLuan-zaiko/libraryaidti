@@ -133,6 +133,11 @@ func (r *Router) Setup(engine *gin.Engine) {
 		articles := v1.Group("/articles")
 		{
 			articles.GET("", r.articleHandler.GetArticles)
+			// Search endpoint with rate limiting (5 req/sec, burst 20) and caching
+			articles.GET("/search",
+				middleware.RateLimitMiddleware(rate.Limit(5.0), 20),
+				middleware.CacheMiddleware(r.cache, time.Second*30),
+				r.articleHandler.SearchArticles)
 			articles.GET("/trending", r.articleHandler.GetTrending)
 			articles.GET("/discussed", r.articleHandler.GetDiscussed)
 			// View tracking - public endpoint with rate limiting (10 req/min)

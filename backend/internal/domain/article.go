@@ -177,6 +177,8 @@ type ArticleRepository interface {
 	IncrementViewCount(id uuid.UUID) error
 	IncrementCommentCount(id uuid.UUID) error
 	DecrementCommentCount(id uuid.UUID) error
+	// Search method with full-text search and fuzzy matching
+	SearchArticles(query string, offset, limit int, filters map[string]interface{}) ([]Article, int64, error)
 }
 
 type ArticleService interface {
@@ -196,6 +198,8 @@ type ArticleService interface {
 	GetTrendingArticles(limit int) ([]Article, error)
 	GetDiscussedArticles(limit int) ([]Article, error)
 	GetRandomArticles(limit int, excludeIDs []uuid.UUID) ([]Article, error)
+	// Search articles with full-text search and fuzzy matching
+	SearchArticles(query string, page, limit int, filters map[string]interface{}) ([]Article, int64, error)
 }
 
 type RatingRepository interface {

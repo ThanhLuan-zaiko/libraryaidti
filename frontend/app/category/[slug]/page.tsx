@@ -14,6 +14,7 @@ import EngagementShowcase from '@/components/EngagementShowcase';
 import ImpactBar from '@/components/ImpactBar';
 import DiscoveryGrid from '@/components/DiscoveryGrid';
 import Pagination from '@/components/Pagination';
+import { useScrollRestoration } from '@/hooks/useScrollRestoration';
 
 function CategoryContent() {
     const { slug } = useParams();
@@ -31,6 +32,9 @@ function CategoryContent() {
     const [latestLoading, setLatestLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const PAGE_SIZE = 9;
+
+    // Track loading states for scroll restoration
+    const { isRestoring } = useScrollRestoration([loading, latestLoading]);
 
     // Initial load for category details and featured/trending
     useEffect(() => {
@@ -97,7 +101,7 @@ function CategoryContent() {
             setLatest(res.data);
             setTotalPages(Math.ceil(res.meta.total / PAGE_SIZE));
 
-            if (!isInitial) {
+            if (!isInitial && !isRestoring) {
                 setTimeout(() => {
                     const section = document.getElementById('latest-news');
                     if (section) {

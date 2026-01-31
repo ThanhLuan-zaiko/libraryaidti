@@ -14,6 +14,7 @@ import ImpactBar from '@/components/ImpactBar';
 import DiscoveryGrid from '@/components/DiscoveryGrid';
 import Pagination from '@/components/Pagination';
 import TagHero from '@/components/tag/TagHero';
+import { useScrollRestoration } from '@/hooks/useScrollRestoration';
 
 function TagContent() {
     const { slug } = useParams();
@@ -31,6 +32,9 @@ function TagContent() {
     const [latestLoading, setLatestLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const PAGE_SIZE = 9;
+
+    // Track loading states for scroll restoration
+    const { isRestoring } = useScrollRestoration([loading, latestLoading]);
 
     // Initial load for tag details and trending
     useEffect(() => {
@@ -63,6 +67,7 @@ function TagContent() {
             } catch (err) {
                 console.error('Failed to fetch tag data:', err);
                 setError('Đã có lỗi xảy ra khi tải dữ liệu chủ đề');
+                setLoading(false);
             }
         };
 
@@ -93,7 +98,7 @@ function TagContent() {
             setLatest(res.data);
             setTotalPages(Math.ceil(res.meta.total / PAGE_SIZE));
 
-            if (!isInitial) {
+            if (!isInitial && !isRestoring) {
                 setTimeout(() => {
                     const section = document.getElementById('latest-news');
                     if (section) {

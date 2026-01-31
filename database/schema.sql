@@ -397,6 +397,50 @@ CREATE TRIGGER update_system_settings_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+-- =========================================
+-- ARTICLE FULL-TEXT SEARCH SETUP
+-- =========================================
+
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS search_vector tsvector;
+
+CREATE INDEX IF NOT EXISTS idx_articles_search_vector 
+ON articles USING gin(search_vector);
+
+CREATE OR REPLACE FUNCTION articles_search_vector_update() 
+RETURNS trigger AS $$
+BEGIN
+  NEW.search_vector :=
+    setweight(to_tsvector('simple', coalesce(NEW.title, '')), 'A') ||
+    setweight(to_tsvector('simple', coalesce(NEW.summary, '')), 'B') ||
+    setweight(to_tsvector('simple', coalesce(NEW.content, '')), 'C');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to automatically update search_vector on INSERT or UPDATE
+DROP TRIGGER IF EXISTS tsvector_articles_update ON articles;
+CREATE TRIGGER tsvector_articles_update 
+  BEFORE INSERT OR UPDATE ON articles
+  FOR EACH ROW 
+  EXECUTE FUNCTION articles_search_vector_update();
+
+-- Backfill search_vector for all existing articles
+-- This populates the search_vector column for articles that already exist
+UPDATE articles 
+SET search_vector = 
+  setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
+  setweight(to_tsvector('simple', coalesce(summary, '')), 'B') ||
+  setweight(to_tsvector('simple', coalesce(content, '')), 'C')
+WHERE search_vector IS NULL;
+
+-- Add comments for documentation
+COMMENT ON COLUMN articles.search_vector IS 'Full-text search vector with weighted title (A), summary (B), and content (C)';
+COMMENT ON INDEX idx_articles_search_vector IS 'GIN index for fast full-text search on articles';
+
+-- =========================================
+-- SEED DATA
+-- =========================================
+
 INSERT INTO roles (id, name, description) VALUES
 (gen_random_uuid(), 'ADMIN', 'Toàn quyền quản trị hệ thống'),
 (gen_random_uuid(), 'EDITOR', 'Biên tập nội dung'),

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { HiOutlineClock, HiOutlineChevronLeft, HiOutlineChevronRight } from 'react-icons/hi';
+import { useRouter } from 'next/navigation';
+import { HiOutlineClock, HiOutlineChevronLeft, HiOutlineChevronRight, HiArrowLeft } from 'react-icons/hi';
 import { Article } from '@/services/article.service';
 import { getImageUrl } from '@/utils/image';
 
@@ -15,6 +16,7 @@ interface ArticleHeroProps {
 const ArticleHero: React.FC<ArticleHeroProps> = ({ article, formattedDate, readTime }) => {
     const [activeIndex, setActiveIndex] = useState(0);
     const [isZoomed, setIsZoomed] = useState(false);
+    const router = useRouter();
 
     // Get all images, fallback to primary image_url if no images array
     const galleryImages = article.images && article.images.length > 0
@@ -34,6 +36,11 @@ const ArticleHero: React.FC<ArticleHeroProps> = ({ article, formattedDate, readT
         }, 8000);
         return () => clearInterval(interval);
     }, [galleryImages.length]);
+
+    const handleBack = (e: React.MouseEvent) => {
+        e.preventDefault();
+        router.back();
+    };
 
     const handlePrev = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -65,6 +72,20 @@ const ArticleHero: React.FC<ArticleHeroProps> = ({ article, formattedDate, readT
                         <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent" />
                     </div>
                 ))}
+            </div>
+
+            {/* Back Button */}
+            <div className="absolute top-24 left-6 md:left-12 z-30 pointer-events-auto">
+                <button
+                    onClick={handleBack}
+                    className="group flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 text-white hover:bg-white hover:text-gray-950 transition-all shadow-2xl overflow-hidden relative"
+                >
+                    <div className="relative z-10 flex items-center gap-3">
+                        <HiArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em]">Quay lại</span>
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 via-blue-600/10 to-blue-600/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
             </div>
 
             {/* Navigation Arrows */}

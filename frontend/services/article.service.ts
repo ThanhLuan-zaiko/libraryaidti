@@ -208,6 +208,45 @@ export const articleService = {
             user_rating: { content: number; clarity: number; relevance: number } | null
         }>>(`${ARTICLES_URL}/${id}/rating`, { signal });
         return response.data.data || { average: 0, count: 0, user_rating: null };
+    },
+
+    async search(params: {
+        q: string;
+        page?: number;
+        limit?: number;
+        category_id?: string;
+        status?: string;
+    }, signal?: AbortSignal): Promise<{
+        data: Article[];
+        meta: {
+            total: number;
+            page: number;
+            limit: number;
+            query: string;
+        };
+    }> {
+        const queryParams = {
+            q: params.q,
+            page: params.page || 1,
+            limit: params.limit || 5,
+            ...(params.category_id && { category_id: params.category_id }),
+            ...(params.status && { status: params.status }),
+        };
+
+        const response = await apiClient.get<BackendResponse<Article[], {
+            total: number;
+            page: number;
+            limit: number;
+            query: string;
+        }>>(`${ARTICLES_URL}/search`, {
+            params: queryParams,
+            signal
+        });
+
+        return {
+            data: response.data.data || [],
+            meta: response.data.meta || { total: 0, page: 1, limit: 5, query: params.q }
+        };
     }
 };
 

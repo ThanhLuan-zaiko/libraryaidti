@@ -13,6 +13,7 @@ import EngagementShowcase from '@/components/EngagementShowcase';
 import ImpactBar from '@/components/ImpactBar';
 import DiscoveryGrid from '@/components/DiscoveryGrid';
 import Pagination from '@/components/Pagination';
+import { useScrollRestoration } from '@/hooks/useScrollRestoration';
 
 function ArticlesContent() {
     const searchParams = useSearchParams();
@@ -27,6 +28,9 @@ function ArticlesContent() {
     const [totalPages, setTotalPages] = useState(1);
     const [latestLoading, setLatestLoading] = useState(false);
     const PAGE_SIZE = 9;
+
+    // Track loading states for scroll restoration
+    const { isRestoring } = useScrollRestoration([loading, latestLoading]);
 
     // Initial load for featured and trending
     useEffect(() => {
@@ -58,7 +62,7 @@ function ArticlesContent() {
             setLatest(res.data);
             setTotalPages(Math.ceil(res.meta.total / PAGE_SIZE));
 
-            if (shouldScroll && !isInitialMount.current) {
+            if (shouldScroll && !isInitialMount.current && !isRestoring) {
                 setTimeout(() => {
                     const section = document.getElementById('latest-news');
                     if (section) {
